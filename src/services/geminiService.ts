@@ -1,10 +1,10 @@
-import { GoogleGenAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AppState } from "../types";
 
 export const getBusinessAdvice = async (data: AppState, query: string): Promise<string> => {
   try {
-    // Usamos la API KEY que configuraremos en Vercel
-    const genAI = new GoogleGenAI(import.meta.env.VITE_GEMINI_API_KEY);
+    // Fíjate que aquí ahora dice GoogleGenerativeAI (el nombre completo)
+    const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const summary = {
@@ -18,6 +18,7 @@ export const getBusinessAdvice = async (data: AppState, query: string): Promise<
     const result = await model.generateContent(prompt);
     return result.response.text();
   } catch (e) {
+    console.error(e);
     return "Error al conectar con el Asesor IA. Verifica tu API Key.";
   }
 };
