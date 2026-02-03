@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/generative-ai";
 import { AppState } from "../types";
 
 export const getBusinessAdvice = async (data: AppState, query: string): Promise<string> => {
