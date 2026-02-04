@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Cloud, CloudUpload, CloudDownload, Copy, Check, RefreshCw, Zap, Key, Info, AlertCircle, ShieldCheck } from 'lucide-react';
@@ -39,10 +38,10 @@ const SyncCenter = () => {
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-8 animate-fade-in pb-24">
       <div className="text-center space-y-4">
-        <div className="inline-flex p-4 bg-coffee-800 rounded-3xl text-white shadow-xl mb-2">
+        <div className="inline-flex p-4 bg-[#3d2b1f] rounded-3xl text-white shadow-xl mb-2">
           <Cloud size={48} className={isSyncing ? 'animate-pulse' : ''} />
         </div>
-        <h2 className="text-4xl font-black text-coffee-900 tracking-tighter">Nube La Tostadora</h2>
+        <h2 className="text-4xl font-black text-[#3d2b1f] tracking-tighter">Nube La Tostadora</h2>
         <p className="text-gray-500">Tus datos seguros y sincronizados entre PC y Celular.</p>
       </div>
 
@@ -55,7 +54,6 @@ const SyncCenter = () => {
 
       {!syncId ? (
         <div className="space-y-6">
-           {/* Crear Sesión */}
            <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col items-center text-center space-y-6">
               <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center text-green-600">
                 <Zap size={32} />
@@ -67,14 +65,13 @@ const SyncCenter = () => {
               <button 
                 onClick={handleCreateNew}
                 disabled={isSyncing}
-                className="w-full bg-coffee-800 text-white py-4 rounded-2xl font-black hover:bg-coffee-900 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 disabled:opacity-50"
+                className="w-full bg-[#3d2b1f] text-white py-4 rounded-2xl font-black hover:bg-[#2a1d15] transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 disabled:opacity-50"
               >
                 {isSyncing ? <RefreshCw className="animate-spin" /> : <ShieldCheck size={18} />}
                 EMPEZAR A USAR LA NUBE
               </button>
            </div>
 
-           {/* Conectar Existente */}
            <div className="bg-gray-100 p-8 rounded-[2rem] border border-gray-200 flex flex-col items-center text-center space-y-6">
               <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                 <Key size={32} />
@@ -87,7 +84,7 @@ const SyncCenter = () => {
                  <input 
                    type="text" 
                    placeholder="Ej: 7a8b9c..."
-                   className="w-full bg-white border border-gray-200 p-4 rounded-xl text-center font-bold text-coffee-900 focus:ring-2 focus:ring-coffee-500 outline-none"
+                   className="w-full bg-white border border-gray-200 p-4 rounded-xl text-center font-bold text-[#3d2b1f] focus:ring-2 focus:ring-orange-500 outline-none"
                    value={inputValue}
                    onChange={e => setInputValue(e.target.value)}
                  />
@@ -105,7 +102,6 @@ const SyncCenter = () => {
         <div className="space-y-6 animate-scale-up">
           <div className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 overflow-hidden">
              <div className="p-8 space-y-8">
-                {/* Status Bar */}
                 <div className="flex justify-between items-center">
                    <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full ${syncStatus === 'connected' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
@@ -114,36 +110,34 @@ const SyncCenter = () => {
                       </span>
                    </div>
                    <span className="text-[10px] font-bold bg-gray-100 px-3 py-1 rounded-full text-gray-500">
-                      PESO: {dataSize}
+                     PESO: {dataSize}
                    </span>
                 </div>
 
-                {/* Key Display */}
                 <div className="bg-gray-50 p-6 rounded-3xl flex flex-col items-center space-y-3 border border-gray-100">
                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Tu Clave Privada de Sincronización</p>
                    <div className="flex items-center gap-4">
-                      <h4 className="text-4xl font-black text-coffee-900 tracking-tighter uppercase select-all">{syncId}</h4>
+                      <h4 className="text-4xl font-black text-[#3d2b1f] tracking-tighter uppercase select-all">{syncId}</h4>
                       <button onClick={copyId} className="p-3 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all active:scale-95">
-                         {copied ? <Check size={20} className="text-green-500" /> : <Copy size={20} className="text-coffee-600" />}
+                         {copied ? <Check size={20} className="text-green-500" /> : <Copy size={20} className="text-[#3d2b1f]" />}
                       </button>
                    </div>
                    <p className="text-[10px] text-amber-600 font-bold">¡No compartas esta clave con nadie!</p>
                 </div>
 
-                {/* Main Actions */}
                 <div className="grid grid-cols-2 gap-4">
                    <button 
                      onClick={() => pushToCloud()}
                      disabled={isSyncing}
-                     className="flex flex-col items-center gap-2 p-6 bg-coffee-800 text-white rounded-[2rem] hover:bg-coffee-900 transition-all shadow-xl active:scale-95 disabled:opacity-50"
+                     className="flex flex-col items-center gap-2 p-6 bg-[#3d2b1f] text-white rounded-[2rem] hover:bg-[#2a1d15] transition-all shadow-xl active:scale-95 disabled:opacity-50"
                    >
                       <CloudUpload size={32} />
-                      <span className="font-bold text-sm">Subir a Nube</span>
+                      <span className="font-bold text-sm text-white">Subir a Nube</span>
                    </button>
                    <button 
                      onClick={() => pullFromCloud()}
                      disabled={isSyncing}
-                     className="flex flex-col items-center gap-2 p-6 bg-white border-2 border-coffee-800 text-coffee-800 rounded-[2rem] hover:bg-coffee-50 transition-all active:scale-95 disabled:opacity-50 shadow-md"
+                     className="flex flex-col items-center gap-2 p-6 bg-white border-2 border-[#3d2b1f] text-[#3d2b1f] rounded-[2rem] hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50 shadow-md"
                    >
                       <CloudDownload size={32} />
                       <span className="font-bold text-sm">Bajar de Nube</span>
@@ -172,9 +166,9 @@ const SyncCenter = () => {
          <div className="space-y-1">
             <h5 className="font-bold text-amber-900 text-sm">¿Cómo no perder mis datos?</h5>
             <ol className="text-xs text-amber-800 leading-relaxed space-y-2 list-decimal ml-4">
-              <li><b>Guardado Automático:</b> Tus datos se guardan en este dispositivo automáticamente cada vez que haces un cambio.</li>
-              <li><b>Cambio de Dispositivo:</b> Si vas a pasar de la PC al Celular, presiona <b>Subir a Nube</b> en la PC y luego <b>Bajar de Nube</b> en el Celular.</li>
-              <li><b>Clave Permanente:</b> Una vez que pongas tu clave, la app la recordará siempre, incluso si cierras la pestaña o reinicias el equipo.</li>
+              <li><b>Guardado Automático:</b> Tus datos se guardan localmente cada vez que haces un cambio.</li>
+              <li><b>Cambio de Dispositivo:</b> Presiona <b>Subir a Nube</b> en la PC y luego <b>Bajar de Nube</b> en el Celular.</li>
+              <li><b>Clave Permanente:</b> Una vez que pongas tu clave, la app la recordará siempre.</li>
             </ol>
          </div>
       </div>
