@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
-import { DollarSign, Package, ShoppingBag, TrendingUp, X, Settings, Coffee, ShoppingCart, Award, List, Wallet, User as UserIcon, Calendar, Filter, ChevronDown, CheckSquare, Square, Target, Trophy, Medal, Crown } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie } from 'recharts';
+import { DollarSign, Package, ShoppingBag, TrendingUp, X, Settings, Coffee, ShoppingCart, Award, List, Wallet, User as UserIcon, Calendar, Filter, ChevronDown, CheckSquare, Square, Target, Trophy, Medal, Crown, Utensils } from 'lucide-react';
 
 interface ModalProps {
   title: string;
@@ -25,7 +25,7 @@ const Modal = ({ title, children, onClose, maxWidth = 'max-w-2xl' }: ModalProps)
 );
 
 const Dashboard = () => {
-  const { sales = [], products = [] } = useStore();
+  const { sales = [], products = [], consumptions = [] } = useStore();
   
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -52,38 +52,55 @@ const Dashboard = () => {
     setEndDate(end.toISOString().split('T')[0]);
   };
 
-  const { metrics, topClients, topVarieties } = useMemo(() => {
-    const filtered = sales.filter(s => {
+  const { metrics, topClients, topVarieties, usageData } = useMemo(() => {
+    // 1. Filtrar Ventas
+    const filteredSales = sales.filter(s => {
       const saleDate = s.date.split('T')[0];
       const matchesDate = (!startDate || saleDate >= startDate) && (!endDate || saleDate <= endDate);
       const matchesVar = selectedVarieties.length === 0 || s.items.some(i => selectedVarieties.includes(i.id));
       return matchesDate && matchesVar;
     });
 
-    let rev = 0, cost = 0, units = 0;
+    // 2. Filtrar Consumos Propios
+    const filteredConsumptions = consumptions.filter(c => {
+      const consDate = c.date.split('T')[0];
+      const matchesDate = (!startDate || consDate >= startDate) && (!endDate || consDate <= endDate);
+      const matchesVar = selectedVarieties.length === 0 || selectedVarieties.includes(c.productId);
+      return matchesDate && matchesVar;
+    });
+
+    let rev = 0, cost = 0, unitsSold = 0, unitsConsumed = 0;
     const clientMap: Record<string, number> = {};
     const varietyMap: Record<string, {name: string, qty: number}> = {};
 
-    filtered.forEach(s => {
+    filteredSales.forEach(s => {
       clientMap[s.clientName] = (clientMap[s.clientName] || 0) + Number(s.total);
       s.items.forEach(i => {
         if (selectedVarieties.length === 0 || selectedVarieties.includes(i.id)) {
           rev += (Number(i.appliedPrice) * Number(i.quantity));
           const p = products.find(prod => prod.id === i.id);
           cost += (Number(p?.costPrice || 0) * Number(i.quantity));
-          units += Number(i.quantity);
+          unitsSold += Number(i.quantity);
           if (!varietyMap[i.id]) varietyMap[i.id] = { name: i.name, qty: 0 };
           varietyMap[i.id].qty += Number(i.quantity);
         }
       });
     });
 
+    filteredConsumptions.forEach(c => {
+      unitsConsumed += Number(c.quantity);
+    });
+
     return {
-      metrics: { rev, cost, units, outstanding: filtered.reduce((acc, s) => acc + Number(s.balance || 0), 0) },
+      metrics: { rev, cost, unitsSold, unitsConsumed, outstanding: filteredSales.reduce((acc, s) => acc + Number(s.balance || 0), 0) },
       topClients: Object.entries(clientMap).sort((a,b) => b[1] - a[1]).slice(0, 3),
-      topVarieties: Object.values(varietyMap).sort((a,b) => b.qty - a.qty)
+      topVarieties: Object.values(varietyMap).sort((a,b) => b.qty - a.qty),
+      usageData: [
+        { name: 'Ventas', value: unitsSold, color: '#111827' }, // Negro
+        { name: 'Consumo', value: unitsConsumed, color: '#f59e0b' } // Ámbar
+      ]
     };
-  }, [sales, products, startDate, endDate, selectedVarieties]);
+  }, [sales, products, consumptions, startDate, endDate, selectedVarieties]);
 
   const yearlyComparisonData = useMemo(() => {
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -98,125 +115,134 @@ const Dashboard = () => {
   return (
     <div className="p-4 sm:p-8 space-y-6 sm:space-y-10 pb-24 bg-white min-h-screen text-gray-900">
       
-      {/* HEADER RESPONSIVO */}
+      {/* HEADER */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
-          <h2 className="text-4xl sm:text-6xl font-black tracking-tighter leading-none">La Tostadora</h2>
-          <p className="text-gray-400 font-bold uppercase text-[10px] sm:text-xs tracking-[0.2em] mt-2">Panel de Control General</p>
+          <h2 className="text-4xl sm:text-6xl font-black tracking-tighter leading-none">Dashboard</h2>
+          <p className="text-gray-400 font-bold uppercase text-[10px] sm:text-xs tracking-[0.2em] mt-2 italic">La Tostadora - Business Intelligence</p>
         </div>
-        
-        {/* BOTONES DE TIEMPO (Se ajustan en móvil) */}
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full lg:w-auto">
           {['MES', '3MESES', 'AÑO', 'TODO'].map((type) => (
-            <button 
-              key={type}
-              onClick={() => setQuickRange(type as any)} 
-              className="px-4 py-3 bg-gray-100 rounded-2xl font-black text-[10px] sm:text-xs hover:bg-gray-900 hover:text-white transition-all active:scale-95"
-            >
-              {type}
-            </button>
+            <button key={type} onClick={() => setQuickRange(type as any)} className="px-4 py-3 bg-gray-100 rounded-2xl font-black text-[10px] sm:text-xs hover:bg-gray-900 hover:text-white transition-all active:scale-95">{type}</button>
           ))}
         </div>
       </div>
 
-      {/* FILTROS (Se apilan en móvil) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border-2 border-gray-100">
-        <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border-2 border-gray-100 overflow-hidden">
-          <Calendar className="text-gray-400 shrink-0" size={20} />
-          <div className="flex items-center gap-1 flex-1 font-black text-sm">
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-transparent focus:outline-none" />
-            <span className="text-gray-300">-</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-transparent focus:outline-none" />
-          </div>
-        </div>
-        <div className="relative">
-          <button onClick={() => setShowVarietyDropdown(!showVarietyDropdown)} className="w-full flex justify-between items-center p-3 sm:p-4 bg-white rounded-2xl border-2 border-gray-100 font-black text-sm">
-            <div className="flex items-center gap-2"><Coffee size={18}/> {selectedVarieties.length || 'Todas'} Variedades</div>
-            <ChevronDown size={18}/>
-          </button>
-          {showVarietyDropdown && (
-            <div className="absolute top-full w-full mt-2 bg-white border-4 border-gray-900 rounded-[2rem] shadow-2xl z-[110] p-4 space-y-2 max-h-60 overflow-y-auto">
-              {products.map(p => (
-                <label key={p.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer font-bold active:bg-gray-100">
-                  <input type="checkbox" className="hidden" checked={selectedVarieties.includes(p.id)} onChange={() => setSelectedVarieties(prev => prev.includes(p.id) ? prev.filter(v => v !== p.id) : [...prev, p.id])} />
-                  {selectedVarieties.includes(p.id) ? <CheckSquare size={24} className="text-gray-900"/> : <Square size={24} className="text-gray-200"/>}
-                  <span className="text-sm">{p.name}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* PODIOS (Layout flexible) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-        {/* PODIO CLIENTES */}
-        <div className="bg-gray-900 text-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl">
-          <div className="flex items-center gap-3 mb-6 sm:mb-8">
-            <Crown className="text-amber-400" size={28}/>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic">Top 3 Clientes</h3>
-          </div>
-          <div className="space-y-3">
-            {topClients.map(([name, total], idx) => (
-              <div key={idx} className="flex items-center justify-between bg-white/10 p-4 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-3">
-                  <span className={`text-xl font-black ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-gray-300' : 'text-orange-400'}`}>#{idx + 1}</span>
-                  <span className="font-bold text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">{name}</span>
-                </div>
-                <span className="font-black text-base sm:text-xl text-amber-50">${total.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* PODIO VARIEDADES */}
-        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-900">
-          <div className="flex items-center gap-3 mb-6 sm:mb-8">
-            <Trophy className="text-gray-900" size={28}/>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic text-gray-900">Variedades</h3>
-          </div>
-          <div className="space-y-4">
-            {topVarieties.slice(0, 5).map((v, idx) => (
-              <div key={idx} className="flex items-center justify-between border-b-2 border-gray-50 pb-2">
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center font-black text-[10px]">{idx + 1}</span>
-                  <span className="font-bold text-gray-800 text-sm sm:text-base">{v.name}</span>
-                </div>
-                <span className="font-black text-gray-900 text-sm sm:text-base">{v.qty} <span className="text-[10px] text-gray-400">UN.</span></span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* METAS Y RENTABILIDAD (Mejorado para móvil) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+      {/* METAS Y UTILIDAD */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-amber-500 p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-900">
           <div className="flex justify-between items-start mb-4">
-            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter uppercase">Ventas vs Objetivo</h3>
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter uppercase italic">Ventas vs Objetivo</h3>
             <button onClick={() => setActiveModal('goals')} className="p-2 bg-gray-900 rounded-full text-white active:scale-90"><Settings size={20}/></button>
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-6">
             <h4 className="text-5xl sm:text-7xl font-black text-gray-900 tracking-tighter leading-none">${metrics.rev.toLocaleString()}</h4>
-            <span className="font-black text-gray-900 text-xs sm:text-sm bg-gray-900/10 px-3 py-1 rounded-full border border-gray-900/20">META: ${monthlyGoal.toLocaleString()}</span>
+            <span className="font-black text-gray-900 text-xs sm:text-sm bg-gray-900/10 px-3 py-1 rounded-full border border-gray-900/20 uppercase tracking-widest">Meta: ${monthlyGoal.toLocaleString()}</span>
           </div>
           <div className="w-full h-8 sm:h-10 bg-gray-900/10 rounded-full border-4 border-gray-900 overflow-hidden">
             <div className="h-full bg-gray-900 transition-all duration-1000 shadow-[0_0_20px_rgba(0,0,0,0.3)]" style={{ width: `${Math.min((metrics.rev/monthlyGoal)*100, 100)}%` }}></div>
           </div>
         </div>
         
-        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-100 flex flex-col justify-center items-center text-center">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Utilidad Estimada</p>
-          <h3 className="text-4xl sm:text-5xl font-black text-gray-900 tracking-tighter">${(metrics.rev - metrics.cost).toLocaleString()}</h3>
-          <div className="mt-4 px-4 py-2 bg-green-100 rounded-2xl">
-             <span className="text-green-700 font-black text-sm">Rentabilidad: {metrics.rev > 0 ? Math.round(((metrics.rev - metrics.cost)/metrics.rev)*100) : 0}%</span>
+        <div className="bg-gray-900 p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-900 flex flex-col justify-center items-center text-center text-white">
+          <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2">Utilidad Neta Est.</p>
+          <h3 className="text-4xl sm:text-5xl font-black tracking-tighter">${(metrics.rev - metrics.cost).toLocaleString()}</h3>
+          <div className="mt-4 px-4 py-2 bg-white/10 rounded-2xl border border-white/5">
+             <span className="text-amber-400 font-black text-sm uppercase italic">Margen: {metrics.rev > 0 ? Math.round(((metrics.rev - metrics.cost)/metrics.rev)*100) : 0}%</span>
           </div>
         </div>
       </div>
 
-      {/* GRÁFICO (Oculto en pantallas muy pequeñas o con scroll) */}
+      {/* ANÁLISIS DE CONSUMO (NUEVO) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-6 rounded-[2rem] shadow-md border-2 border-gray-100 lg:col-span-2 flex flex-col sm:flex-row items-center gap-6">
+          <div className="w-full sm:w-1/2 h-48">
+            <h4 className="text-xs font-black uppercase text-gray-400 tracking-widest mb-2 text-center">Uso de Producto</h4>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie 
+                  data={usageData} 
+                  innerRadius={50} 
+                  outerRadius={70} 
+                  paddingAngle={5} 
+                  dataKey="value"
+                >
+                  {usageData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="w-full sm:w-1/2 space-y-4">
+             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                <div className="flex items-center gap-2 font-black text-sm"><div className="w-3 h-3 bg-gray-900 rounded-full"></div> Vendido</div>
+                <span className="font-black text-lg">{metrics.unitsSold} <span className="text-[10px] text-gray-400">UN.</span></span>
+             </div>
+             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                <div className="flex items-center gap-2 font-black text-sm text-amber-600"><div className="w-3 h-3 bg-amber-500 rounded-full"></div> Consumo</div>
+                <span className="font-black text-lg text-amber-600">{metrics.unitsConsumed} <span className="text-[10px] text-amber-400 font-bold">UN.</span></span>
+             </div>
+             <p className="text-[10px] font-bold text-gray-400 uppercase italic">El consumo interno representa el {metrics.unitsSold > 0 ? Math.round((metrics.unitsConsumed / (metrics.unitsSold + metrics.unitsConsumed)) * 100) : 0}% de la salida total.</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] shadow-md border-2 border-gray-100 flex flex-col justify-center">
+            <Package className="text-blue-500 mb-2" size={32} />
+            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Unidades Vendidas</p>
+            <h4 className="text-3xl font-black">{metrics.unitsSold.toLocaleString()}</h4>
+        </div>
+
+        <div className="bg-red-50 p-6 rounded-[2rem] shadow-md border-2 border-red-100 flex flex-col justify-center">
+            <Utensils className="text-red-600 mb-2" size={32} />
+            <p className="text-[10px] font-black uppercase text-red-400 tracking-widest">Stock Crítico</p>
+            <h4 className="text-3xl font-black text-red-600">{products.filter(p => p.stock <= stockThreshold).length}</h4>
+        </div>
+      </div>
+
+      {/* PODIOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-900">
+          <div className="flex items-center gap-3 mb-6 sm:mb-8">
+            <Crown className="text-amber-500" size={28}/>
+            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic text-gray-900">Top 3 Clientes</h3>
+          </div>
+          <div className="space-y-3">
+            {topClients.map(([name, total], idx) => (
+              <div key={idx} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <span className={`text-xl font-black ${idx === 0 ? 'text-amber-500' : 'text-gray-400'}`}>#{idx + 1}</span>
+                  <span className="font-bold text-sm sm:text-base text-gray-900 truncate max-w-[150px]">{name}</span>
+                </div>
+                <span className="font-black text-base sm:text-xl text-gray-900">${total.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-900">
+          <div className="flex items-center gap-3 mb-6 sm:mb-8">
+            <Trophy className="text-gray-900" size={28}/>
+            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic text-gray-900">Variedades Estrella</h3>
+          </div>
+          <div className="space-y-4">
+            {topVarieties.slice(0, 5).map((v, idx) => (
+              <div key={idx} className="flex items-center justify-between border-b-2 border-gray-50 pb-2">
+                <div className="flex items-center gap-3 font-bold text-gray-800">
+                  <span className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center font-black text-[10px]">{idx + 1}</span>
+                  {v.name}
+                </div>
+                <span className="font-black text-gray-900">{v.qty} <span className="text-[10px] text-gray-400">UN.</span></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* TENDENCIA ANUAL */}
       <div className="bg-white p-4 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-2 border-gray-100">
-        <h3 className="text-xl sm:text-2xl font-black tracking-tighter mb-6 sm:mb-8 text-center sm:text-left">Tendencia Anual</h3>
+        <h3 className="text-xl sm:text-2xl font-black tracking-tighter mb-6 text-center sm:text-left uppercase">Comparativa Interanual</h3>
         <div className="h-60 sm:h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={yearlyComparisonData}>
@@ -231,19 +257,19 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* MODAL CONFIG (Ajustado para el pulgar en móvil) */}
+      {/* MODAL CONFIG */}
       {activeModal === 'goals' && (
-        <Modal title="Configurar App" onClose={() => setActiveModal(null)}>
+        <Modal title="Configurar Metas y Alertas" onClose={() => setActiveModal(null)}>
           <div className="space-y-8">
             <div className="bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
-              <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Meta de Venta del Mes ($)</label>
-              <input type="number" value={monthlyGoal} onChange={(e) => setMonthlyGoal(Number(e.target.value))} className="w-full p-4 text-3xl font-black bg-white border-4 border-gray-900 rounded-2xl outline-none focus:ring-4 focus:ring-amber-500/20" />
+              <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Meta Mensual de Facturación ($)</label>
+              <input type="number" value={monthlyGoal} onChange={(e) => setMonthlyGoal(Number(e.target.value))} className="w-full p-4 text-3xl font-black bg-white border-4 border-gray-900 rounded-2xl outline-none" />
             </div>
             <div className="bg-amber-50 p-6 rounded-[2rem] border-2 border-amber-100">
-              <label className="text-[10px] font-black uppercase text-amber-600 mb-2 block tracking-widest">Alerta Stock Bajo (Unidades)</label>
+              <label className="text-[10px] font-black uppercase text-amber-600 mb-2 block tracking-widest">Umbral de Reposición (Stock)</label>
               <input type="number" value={stockThreshold} onChange={(e) => setStockThreshold(Number(e.target.value))} className="w-full p-4 text-2xl font-black bg-white border-2 border-amber-900 rounded-2xl outline-none" />
             </div>
-            <button onClick={() => setActiveModal(null)} className="w-full py-6 bg-gray-900 text-white rounded-[2rem] font-black text-xl shadow-xl active:scale-95 transition-all">GUARDAR CAMBIOS</button>
+            <button onClick={() => setActiveModal(null)} className="w-full py-6 bg-gray-900 text-white rounded-[2rem] font-black text-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest">Confirmar Ajustes</button>
           </div>
         </Modal>
       )}
