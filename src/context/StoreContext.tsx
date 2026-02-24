@@ -47,14 +47,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error' | 'none'>(state.syncId ? 'connected' : 'none');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Guardado automático en LocalStorage
   useEffect(() => {
     if (!isSaveLocked) {
       localStorage.setItem('coffeemaster_data', JSON.stringify(state));
     }
   }, [state, isSaveLocked]);
 
-  // Funciones de ayuda para Supabase
   const syncEverythingToCloud = async (currentState: AppState) => {
     if (!currentState.syncId) return;
     try {
@@ -91,7 +89,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // --- MÉTODOS DE LA APP ---
   const addProduct = async (p: Product) => {
     const newState = { ...state, products: [...state.products, p] };
     setState(newState);
@@ -129,7 +126,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const addSale = async (s: Sale) => {
-    // Actualizar stock de productos automáticamente
     const updatedProducts = state.products.map(p => {
       const itemInCart = s.items.find(item => item.id === p.id);
       if (itemInCart) {
@@ -138,7 +134,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return p;
     });
 
-    // Actualizar total gastado por el cliente
     const updatedClients = state.clients.map(c => {
       if (c.id === s.clientId) {
         return { ...c, totalSpent: c.totalSpent + s.total };
@@ -187,8 +182,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await syncEverythingToCloud(newState);
   };
 
+  // --- CORRECCIÓN DE CONSUMO PROPIO ---
   const addConsumption = async (c: Consumption) => {
-    const newState = { ...state, consumptions: [...state.consumptions, c] };
+    // 1. Buscamos el producto y le restamos el stock
+    const updatedProducts = state.products.map(p => {
+      if (p.id === c.productId) {
+        // Restamos la cantidad consumida asegurando que no baje de 0
+        return { ...p, stock: Math.max(0, p.stock - c.quantity) };
+      }
+      return p;
+    });
+
+    // 2. Creamos el nuevo estado con los productos actualizados y el consumo agregado
+    const newState = { 
+      ...state, 
+      products: updatedProducts,
+      consumptions: [...state.consumptions, c] 
+    };
+
     setState(newState);
     await syncEverythingToCloud(newState);
   };
