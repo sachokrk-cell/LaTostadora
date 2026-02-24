@@ -94,8 +94,8 @@ const Dashboard = () => {
       topClients: Object.entries(clientMap).sort((a,b) => b[1] - a[1]).slice(0, 3),
       topVarieties: Object.values(varietyMap).sort((a,b) => b.qty - a.qty),
       usageData: [
-        { name: 'Ventas', value: unitsSold, color: '#1C1C1C' },
-        { name: 'Consumo', value: unitsConsumed, color: '#6B7A3A' }
+        { name: 'Ventas', value: unitsSold, color: '#1C1C1C' }, // Negro Profundo
+        { name: 'Consumo', value: unitsConsumed, color: '#6B7A3A' } // Verde Oliva
       ],
       goalProgress: Math.min(Math.round((rev / monthlyGoal) * 100), 100)
     };
@@ -114,7 +114,7 @@ const Dashboard = () => {
   return (
     <div className="p-4 sm:p-8 space-y-6 sm:space-y-10 pb-24 bg-[#E8DFC8] min-h-screen text-[#1C1C1C]">
       
-      {/* HEADER */}
+      {/* HEADER - NEGRO TOSTADO */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
           <h2 className="text-4xl sm:text-6xl font-black tracking-tighter leading-none uppercase">Dashboard</h2>
@@ -125,7 +125,7 @@ const Dashboard = () => {
             <button 
               key={type} 
               onClick={() => setQuickRange(type as any)} 
-              className="px-4 py-3 bg-[#1C1C1C] text-[#E8DFC8] rounded-2xl font-black text-[10px] sm:text-xs hover:bg-[#6B7A3A] transition-all active:scale-95"
+              className="px-4 py-3 bg-[#1C1C1C] text-[#E8DFC8] rounded-2xl font-black text-[10px] sm:text-xs hover:bg-[#6B7A3A] transition-all active:scale-95 shadow-md"
             >
               {type}
             </button>
@@ -133,15 +133,15 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* METAS Y UTILIDAD */}
+      {/* METAS Y UTILIDAD - MINIMALISTA PREMIUM */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white/50 p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-[#6B7A3A]/20 relative overflow-hidden group">
+        <div className="lg:col-span-2 bg-white/40 p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-[#6B7A3A]/20 relative overflow-hidden group">
           <div className="relative z-10 flex flex-col h-full justify-between">
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2 text-[#6B7A3A] font-black uppercase text-[10px] tracking-[0.2em] mb-4">
                   <Target size={18} />
-                  Objetivo Mensual
+                  Rendimiento de Ventas
                 </div>
                 <div className="flex items-baseline gap-3">
                   <h3 className="text-5xl sm:text-7xl font-black tracking-tighter text-[#1C1C1C]">
@@ -158,11 +158,11 @@ const Dashboard = () => {
               </button>
             </div>
             
-            <div className="mt-10">
-              <div className="flex justify-between items-end mb-3 font-black">
+            <div className="mt-10 font-black">
+              <div className="flex justify-between items-end mb-3">
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase text-[#6B7A3A] tracking-widest">Estado del Tostado</p>
-                  <p className="text-sm">
+                  <p className="text-[10px] uppercase text-[#6B7A3A] tracking-widest">Estado del Objetivo</p>
+                  <p className="text-sm text-[#1C1C1C]">
                     {goalProgress >= 100 ? '¡Meta Lograda! ☕' : `Faltan $${(monthlyGoal - metrics.rev).toLocaleString()}`}
                   </p>
                 </div>
@@ -178,7 +178,8 @@ const Dashboard = () => {
           </div>
         </div>
         
-        <div className="bg-[#1C1C1C] p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl flex flex-col justify-center items-center text-center text-[#E8DFC8]">
+        {/* UTILIDAD - NEGRO PROFUNDO */}
+        <div className="bg-[#1C1C1C] p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl flex flex-col justify-center items-center text-center text-[#E8DFC8] border-b-8 border-[#6B7A3A]">
           <p className="text-[10px] font-black text-[#6B7A3A] uppercase tracking-[0.2em] mb-2">Utilidad Estimada</p>
           <h3 className="text-4xl sm:text-5xl font-black tracking-tighter">${(metrics.rev - metrics.cost).toLocaleString()}</h3>
           <div className="mt-4 px-4 py-2 bg-[#6B7A3A]/20 rounded-2xl border border-[#6B7A3A]/30">
@@ -187,11 +188,11 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ANÁLISIS DE CONSUMO */}
+      {/* ANÁLISIS DE CONSUMO - MARRÓN CAFÉ Y VERDE */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white/40 p-6 rounded-[2rem] shadow-sm border-2 border-[#6B7A3A]/10 lg:col-span-2 flex flex-col sm:flex-row items-center gap-6">
+        <div className="bg-white/30 p-6 rounded-[2rem] shadow-sm border-2 border-[#6B7A3A]/10 lg:col-span-2 flex flex-col sm:flex-row items-center gap-6">
           <div className="w-full sm:w-1/2 h-48">
-            <h4 className="text-xs font-black uppercase text-[#6B7A3A] tracking-widest mb-2 text-center underline decoration-[#5A3E2B]">Uso de Grano</h4>
+            <h4 className="text-xs font-black uppercase text-[#6B7A3A] tracking-widest mb-2 text-center">Uso de Producto</h4>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie 
@@ -209,73 +210,34 @@ const Dashboard = () => {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="w-full sm:w-1/2 space-y-4">
+          <div className="w-full sm:w-1/2 space-y-4 font-black">
              <div className="flex items-center justify-between border-b border-[#6B7A3A]/10 pb-2">
-                <div className="flex items-center gap-2 font-black text-sm"><div className="w-3 h-3 bg-[#1C1C1C] rounded-full"></div> Vendido</div>
-                <span className="font-black text-lg">{metrics.unitsSold} UN.</span>
+                <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 bg-[#1C1C1C] rounded-full"></div> Vendido</div>
+                <span className="text-lg">{metrics.unitsSold} UN.</span>
              </div>
              <div className="flex items-center justify-between border-b border-[#6B7A3A]/10 pb-2 text-[#6B7A3A]">
-                <div className="flex items-center gap-2 font-black text-sm"><div className="w-3 h-3 bg-[#6B7A3A] rounded-full"></div> Consumo</div>
-                <span className="font-black text-lg">{metrics.unitsConsumed} UN.</span>
+                <div className="flex items-center gap-2 text-sm"><div className="w-3 h-3 bg-[#6B7A3A] rounded-full"></div> Consumo</div>
+                <span className="text-lg">{metrics.unitsConsumed} UN.</span>
              </div>
           </div>
         </div>
 
-        <div className="bg-[#E8DFC8] p-6 rounded-[2rem] shadow-inner border-2 border-[#1C1C1C]/10 flex flex-col justify-center items-center">
+        <div className="bg-[#E8DFC8] p-6 rounded-[2rem] shadow-inner border-2 border-[#5A3E2B]/20 flex flex-col justify-center items-center">
             <ShoppingBag className="text-[#5A3E2B] mb-2" size={32} />
-            <p className="text-[10px] font-black uppercase text-[#6B7A3A] tracking-widest">Unidades</p>
+            <p className="text-[10px] font-black uppercase text-[#6B7A3A] tracking-widest">Ventas</p>
             <h4 className="text-3xl font-black">{metrics.unitsSold.toLocaleString()}</h4>
         </div>
 
         <div className="bg-[#5A3E2B]/10 p-6 rounded-[2rem] border-2 border-[#5A3E2B]/20 flex flex-col justify-center items-center">
             <Utensils className="text-[#5A3E2B] mb-2" size={32} />
-            <p className="text-[10px] font-black uppercase text-[#5A3E2B] tracking-widest text-center">Stock Crítico</p>
+            <p className="text-[10px] font-black uppercase text-[#5A3E2B] tracking-widest">Stock Crítico</p>
             <h4 className="text-3xl font-black text-[#5A3E2B]">{products.filter(p => p.stock <= stockThreshold).length}</h4>
         </div>
       </div>
 
-      {/* PODIOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-        <div className="bg-[#1C1C1C] p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl text-[#E8DFC8]">
-          <div className="flex items-center gap-3 mb-6 sm:mb-8 border-l-4 border-[#6B7A3A] pl-4">
-            <Crown className="text-[#6B7A3A]" size={28}/>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic">Ranking Clientes</h3>
-          </div>
-          <div className="space-y-3">
-            {topClients.map(([name, total], idx) => (
-              <div key={idx} className="flex items-center justify-between bg-[#E8DFC8]/5 p-4 rounded-2xl border border-[#E8DFC8]/10 hover:bg-[#6B7A3A]/20 transition-all">
-                <div className="flex items-center gap-3 font-black">
-                  <span className={`text-xl ${idx === 0 ? 'text-[#6B7A3A]' : 'text-gray-500'}`}>#{idx + 1}</span>
-                  <span className="text-sm sm:text-base">{name}</span>
-                </div>
-                <span className="font-black text-base sm:text-xl text-[#6B7A3A]">${total.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white/60 p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-[#6B7A3A]/20">
-          <div className="flex items-center gap-3 mb-6 sm:mb-8">
-            <Trophy className="text-[#5A3E2B]" size={28}/>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic text-[#1C1C1C]">Variedades Estrella</h3>
-          </div>
-          <div className="space-y-4">
-            {topVarieties.slice(0, 5).map((v, idx) => (
-              <div key={idx} className="flex items-center justify-between border-b border-[#6B7A3A]/10 pb-2">
-                <div className="flex items-center gap-3 font-bold text-[#1C1C1C]">
-                  <span className="w-7 h-7 rounded-full bg-[#6B7A3A] text-[#E8DFC8] flex items-center justify-center font-black text-[10px]">{idx + 1}</span>
-                  {v.name}
-                </div>
-                <span className="font-black text-[#1C1C1C]">{v.qty} <span className="text-[10px] text-[#6B7A3A]">UN.</span></span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* TENDENCIA */}
-      <div className="bg-white/30 p-4 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-[#6B7A3A]/10">
-        <h3 className="text-xl sm:text-2xl font-black tracking-tighter mb-6 text-center sm:text-left uppercase text-[#1C1C1C]">Comparativa de Cosechas</h3>
+      {/* COMPARATIVA ANUAL - VERDE OLIVA */}
+      <div className="bg-white/20 p-4 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-[#6B7A3A]/10">
+        <h3 className="text-xl sm:text-2xl font-black tracking-tighter mb-6 text-center sm:text-left uppercase text-[#1C1C1C]">Comparativa de Rendimiento</h3>
         <div className="h-60 sm:h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={yearlyComparisonData}>
