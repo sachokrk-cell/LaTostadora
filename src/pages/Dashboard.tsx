@@ -52,8 +52,7 @@ const Dashboard = () => {
     setEndDate(end.toISOString().split('T')[0]);
   };
 
-  const { metrics, topClients, topVarieties, usageData } = useMemo(() => {
-    // 1. Filtrar Ventas
+  const { metrics, topClients, topVarieties, usageData, goalProgress } = useMemo(() => {
     const filteredSales = sales.filter(s => {
       const saleDate = s.date.split('T')[0];
       const matchesDate = (!startDate || saleDate >= startDate) && (!endDate || saleDate <= endDate);
@@ -61,7 +60,6 @@ const Dashboard = () => {
       return matchesDate && matchesVar;
     });
 
-    // 2. Filtrar Consumos Propios
     const filteredConsumptions = consumptions.filter(c => {
       const consDate = c.date.split('T')[0];
       const matchesDate = (!startDate || consDate >= startDate) && (!endDate || consDate <= endDate);
@@ -96,11 +94,12 @@ const Dashboard = () => {
       topClients: Object.entries(clientMap).sort((a,b) => b[1] - a[1]).slice(0, 3),
       topVarieties: Object.values(varietyMap).sort((a,b) => b.qty - a.qty),
       usageData: [
-        { name: 'Ventas', value: unitsSold, color: '#111827' }, // Negro
-        { name: 'Consumo', value: unitsConsumed, color: '#f59e0b' } // Ámbar
-      ]
+        { name: 'Ventas', value: unitsSold, color: '#111827' },
+        { name: 'Consumo', value: unitsConsumed, color: '#f59e0b' }
+      ],
+      goalProgress: Math.min(Math.round((rev / monthlyGoal) * 100), 100)
     };
-  }, [sales, products, consumptions, startDate, endDate, selectedVarieties]);
+  }, [sales, products, consumptions, startDate, endDate, selectedVarieties, monthlyGoal]);
 
   const yearlyComparisonData = useMemo(() => {
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -128,19 +127,50 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* METAS Y UTILIDAD */}
+      {/* METAS Y UTILIDAD - REDISEÑO MINIMALISTA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-amber-500 p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl border-4 border-gray-900">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter uppercase italic">Ventas vs Objetivo</h3>
-            <button onClick={() => setActiveModal('goals')} className="p-2 bg-gray-900 rounded-full text-white active:scale-90"><Settings size={20}/></button>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-6">
-            <h4 className="text-5xl sm:text-7xl font-black text-gray-900 tracking-tighter leading-none">${metrics.rev.toLocaleString()}</h4>
-            <span className="font-black text-gray-900 text-xs sm:text-sm bg-gray-900/10 px-3 py-1 rounded-full border border-gray-900/20 uppercase tracking-widest">Meta: ${monthlyGoal.toLocaleString()}</span>
-          </div>
-          <div className="w-full h-8 sm:h-10 bg-gray-900/10 rounded-full border-4 border-gray-900 overflow-hidden">
-            <div className="h-full bg-gray-900 transition-all duration-1000 shadow-[0_0_20px_rgba(0,0,0,0.3)]" style={{ width: `${Math.min((metrics.rev/monthlyGoal)*100, 100)}%` }}></div>
+        <div className="lg:col-span-2 bg-white p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-gray-100 relative overflow-hidden group">
+          <div className="relative z-10 flex flex-col h-full justify-between">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-2 text-gray-400 font-black uppercase text-[10px] tracking-[0.2em] mb-4">
+                  <Target size={18} className="text-amber-500" />
+                  Rendimiento de Ventas
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-5xl sm:text-7xl font-black tracking-tighter text-gray-900">
+                    ${metrics.rev.toLocaleString()}
+                  </h3>
+                  <span className="text-gray-400 font-bold text-lg sm:text-2xl">/ ${monthlyGoal.toLocaleString()}</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActiveModal('goals')} 
+                className="p-3 bg-gray-50 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-2xl transition-all border border-gray-100 active:scale-90"
+              >
+                <Settings size={24}/>
+              </button>
+            </div>
+            
+            <div className="mt-10">
+              <div className="flex justify-between items-end mb-3">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Progreso del Objetivo</p>
+                  <p className="text-sm font-black text-gray-900">
+                    {goalProgress >= 100 ? '¡Meta Alcanzada! 🚀' : `Faltan $${(monthlyGoal - metrics.rev).toLocaleString()} para la meta`}
+                  </p>
+                </div>
+                <span className="text-2xl sm:text-4xl font-black text-gray-900">{goalProgress}%</span>
+              </div>
+              
+              {/* BARRA DE PROGRESO SLIM */}
+              <div className="w-full h-3 sm:h-4 bg-gray-100 rounded-full overflow-hidden border border-gray-50">
+                <div 
+                  className="h-full bg-gray-900 transition-all duration-1000 ease-out rounded-full" 
+                  style={{ width: `${goalProgress}%` }}
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -153,7 +183,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ANÁLISIS DE CONSUMO (NUEVO) */}
+      {/* ANÁLISIS DE CONSUMO */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-[2rem] shadow-md border-2 border-gray-100 lg:col-span-2 flex flex-col sm:flex-row items-center gap-6">
           <div className="w-full sm:w-1/2 h-48">
@@ -184,7 +214,7 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2 font-black text-sm text-amber-600"><div className="w-3 h-3 bg-amber-500 rounded-full"></div> Consumo</div>
                 <span className="font-black text-lg text-amber-600">{metrics.unitsConsumed} <span className="text-[10px] text-amber-400 font-bold">UN.</span></span>
              </div>
-             <p className="text-[10px] font-bold text-gray-400 uppercase italic">El consumo interno representa el {metrics.unitsSold > 0 ? Math.round((metrics.unitsConsumed / (metrics.unitsSold + metrics.unitsConsumed)) * 100) : 0}% de la salida total.</p>
+             <p className="text-[10px] font-bold text-gray-400 uppercase italic">Consumo interno: {metrics.unitsSold > 0 ? Math.round((metrics.unitsConsumed / (metrics.unitsSold + metrics.unitsConsumed)) * 100) : 0}% de la salida.</p>
           </div>
         </div>
 
