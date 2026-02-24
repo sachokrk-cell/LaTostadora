@@ -40,6 +40,7 @@ const Dashboard = () => {
     localStorage.setItem('lt_monthly_goal', monthlyGoal.toString());
   }, [stockThreshold, monthlyGoal]);
 
+  // LÓGICA DE CALENDARIO SOLICITADA
   const setQuickRange = (type: 'MES' | '3MESES' | 'AÑO' | 'TODO') => {
     const now = new Date();
     let start = new Date();
@@ -133,9 +134,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* METAS Y UTILIDAD - BLANCO SOBRE GRIS MUY CLARO */}
+      {/* METAS Y UTILIDAD - MINIMALISTA BLANCO */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-gray-50 p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] border-2 border-gray-100 relative overflow-hidden">
+        <div className="lg:col-span-2 bg-gray-50 p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] border-2 border-gray-100 relative overflow-hidden group">
           <div className="relative z-10 flex flex-col h-full justify-between">
             <div className="flex justify-between items-start">
               <div>
@@ -178,6 +179,7 @@ const Dashboard = () => {
           </div>
         </div>
         
+        {/* UTILIDAD - NEGRO PROFUNDO MARCA */}
         <div className="bg-[#1C1C1C] p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl flex flex-col justify-center items-center text-center text-white border-b-8 border-[#6B7A3A]">
           <p className="text-[10px] font-black text-[#6B7A3A] uppercase tracking-[0.2em] mb-2 text-amber-500">Utilidad Estimada</p>
           <h3 className="text-4xl sm:text-5xl font-black tracking-tighter">${(metrics.rev - metrics.cost).toLocaleString()}</h3>
@@ -234,12 +236,12 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* PODIOS */}
+      {/* PODIOS - CLIENTES Y VARIEDADES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
         <div className="bg-[#1C1C1C] p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-xl text-white border-l-8 border-[#6B7A3A]">
           <div className="flex items-center gap-3 mb-6 sm:mb-8">
             <Crown className="text-[#6B7A3A]" size={28}/>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic">Ranking Clientes</h3>
+            <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase italic text-white">Ranking Clientes</h3>
           </div>
           <div className="space-y-3">
             {topClients.map(([name, total], idx) => (
@@ -273,9 +275,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* TENDENCIA */}
+      {/* TENDENCIA CON COLORES DE MARCA */}
       <div className="bg-white p-4 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] shadow-sm border-2 border-gray-100">
-        <h3 className="text-xl sm:text-2xl font-black tracking-tighter mb-6 text-center sm:text-left uppercase text-[#1C1C1C]">Comparativa de Cosechas</h3>
+        <h3 className="text-xl sm:text-2xl font-black tracking-tighter mb-6 text-center sm:text-left uppercase text-[#1C1C1C]">Comparativa Anual</h3>
         <div className="h-60 sm:h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={yearlyComparisonData}>
@@ -295,6 +297,24 @@ const Dashboard = () => {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* MODAL CONFIG */}
+      {activeModal === 'goals' && (
+        <Modal title="Configuración de Metas" onClose={() => setActiveModal(null)}>
+          <div className="space-y-8">
+            <div className="bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
+              <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Meta Mensual de Facturación ($)</label>
+              <input type="number" value={monthlyGoal} onChange={(e) => setMonthlyGoal(Number(e.target.value))} className="w-full p-4 text-3xl font-black bg-white border-4 border-[#1C1C1C] rounded-2xl outline-none" />
+            </div>
+            <div className="bg-[#6B7A3A]/10 p-6 rounded-[2rem] border-2 border-[#6B7A3A]/20">
+              <label className="text-[10px] font-black uppercase text-[#6B7A3A] mb-2 block tracking-widest">Umbral de Reposición (Stock)</label>
+              <input type="number" value={stockThreshold} onChange={(e) => setStockThreshold(Number(e.target.value))} className="w-full p-4 text-2xl font-black bg-white border-2 border-[#6B7A3A] rounded-2xl outline-none" />
+            </div>
+            <button onClick={() => setActiveModal(null)} className="w-full py-6 bg-[#1C1C1C] text-white rounded-[2rem] font-black text-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest">Confirmar Ajustes</button>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 };
