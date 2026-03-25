@@ -13,6 +13,7 @@ interface StoreContextType extends AppState {
   deleteSale: (id: string) => Promise<void>;
   addPaymentToSale: (saleId: string, payment: PaymentRecord) => Promise<void>;
   addPurchase: (purchase: Purchase) => Promise<void>;
+  deletePurchase: (id: string) => Promise<void>; // Nueva función agregada
   addConsumption: (consumption: Consumption) => Promise<void>;
   resetData: () => void;
   exportData: () => void;
@@ -176,32 +177,42 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await syncEverythingToCloud(newState);
   };
 
-  // --- CORRECCIÓN DE COMPRAS: SUMAR STOCK AUTOMÁTICAMENTE ---
-  const addPurchase = async (purchase: Purchase) => {
-    const updatedProducts = state.products.map(p => {
-      if (p.id === purchase.productId) {
-        // Registramos el cambio de costo en el historial si es diferente
-        const historyEntry = p.costPrice !== purchase.unitCost ? [{
-          date: purchase.date,
-          oldCost: p.costPrice,
-          newCost: purchase.unitCost
-        }] : [];
-
+  const addPurchase = async (p: Purchase) => {
+    const updatedProducts = state.products.map(prod => {
+      if (prod.id === p.productId) {
         return { 
-          ...p, 
-          stock: p.stock + purchase.quantity, // SUMAMOS EL STOCK
-          costPrice: purchase.unitCost,        // ACTUALIZAMOS EL COSTO
-          // Si tiene margen, recalculamos el precio de venta automáticamente
-          sellingPrice: p.marginPercentage > 0 ? Math.round(purchase.unitCost * (1 + p.marginPercentage / 100)) : p.sellingPrice,
-          history: [...(p.history || []), ...historyEntry]
+          ...prod, 
+          stock: Number(prod.stock) + Number(p.quantity),
+          costPrice: p.unitCost
         };
       }
-      return p;
+      return prod;
+    });
+
+    const newState = { ...state, purchases: [...state.purchases, p], products: updatedProducts };
+    setState(newState);
+    await syncEverythingToCloud(newState);
+  };
+
+  // --- NUEVA FUNCIÓN: BORRAR COMPRA Y REVERTIR STOCK ---
+  const deletePurchase = async (id: string) => {
+    const purchaseToDelete = state.purchases.find(p => p.id === id);
+    if (!purchaseToDelete) return;
+
+    // Revertimos el stock: restamos lo que se había sumado
+    const updatedProducts = state.products.map(prod => {
+      if (prod.id === purchaseToDelete.productId) {
+        return { 
+          ...prod, 
+          stock: Math.max(0, Number(prod.stock) - Number(purchaseToDelete.quantity)) 
+        };
+      }
+      return prod;
     });
 
     const newState = { 
       ...state, 
-      purchases: [...state.purchases, purchase],
+      purchases: state.purchases.filter(p => p.id !== id),
       products: updatedProducts 
     };
     
@@ -217,12 +228,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return p;
     });
 
-    const newState = { 
-      ...state, 
-      products: updatedProducts,
-      consumptions: [...state.consumptions, c] 
-    };
-
+    const newState = { ...state, products: updatedProducts, consumptions: [...state.consumptions, c] };
     setState(newState);
     await syncEverythingToCloud(newState);
   };
@@ -266,7 +272,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addProduct, updateProduct, deleteProduct, 
         addClient, updateClient, deleteClient, 
         addSale, deleteSale, addPaymentToSale,
-        addPurchase, addConsumption,
+        addPurchase, deletePurchase, addConsumption,
         resetData, exportData, importData,
         isSaveLocked, toggleSaveLock, 
         dataSize, isLoading, syncStatus,
