@@ -1,12 +1,12 @@
-
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Search, TrendingUp, ShoppingBag, DollarSign, ArrowUpRight, Percent, Briefcase, History, PackageCheck, Layers } from 'lucide-react';
+import { Search, TrendingUp, ShoppingBag, DollarSign, ArrowUpRight, Percent, Briefcase, History, PackageCheck, Layers, Trash2, AlertTriangle } from 'lucide-react';
 import { Product } from '../types';
 
 const ProductAnalysis = () => {
-  const { products, sales, purchases } = useStore();
+  // EXTRAEMOS deletePurchase DEL STORE
+  const { products, sales, purchases, deletePurchase } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
@@ -70,12 +70,19 @@ const ProductAnalysis = () => {
     );
   }, [products, searchTerm]);
 
+  // FUNCIÓN PARA MANEJAR EL BORRADO
+  const handleDeletePurchase = (purchaseId: string) => {
+    if (window.confirm("¿Estás seguro de eliminar esta compra? El stock se ajustará automáticamente.")) {
+        deletePurchase(purchaseId);
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-8 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-black text-coffee-900 tracking-tighter">Inteligencia de Producto</h2>
-          <p className="text-gray-500">Auditoría financiera y control PEPS (FIFO).</p>
+          <h2 className="text-3xl font-black text-coffee-900 tracking-tighter uppercase">Inteligencia de Producto</h2>
+          <p className="text-gray-500 font-medium">Auditoría financiera y control de lotes.</p>
         </div>
       </div>
 
@@ -125,16 +132,16 @@ const ProductAnalysis = () => {
                     <div className="text-center md:text-left">
                        <span className="text-xs font-black text-coffee-600 uppercase tracking-widest bg-coffee-50 px-3 py-1 rounded-full">{selectedProduct.category}</span>
                        <h3 className="text-3xl font-black text-gray-900 mt-2 tracking-tighter">{selectedProduct.name}</h3>
-                       <p className="text-sm text-gray-500 font-medium">Análisis de rentabilidad y trazabilidad PEPS</p>
+                       <p className="text-sm text-gray-500 font-medium">Análisis de rentabilidad real</p>
                     </div>
                     <div className="md:ml-auto text-center md:text-right bg-coffee-50 p-4 rounded-2xl border border-coffee-100">
-                       <p className="text-xs font-black text-coffee-400 uppercase">Stock Disponible</p>
-                       <p className="text-3xl font-black text-coffee-900">{selectedProduct.stock}</p>
+                       <p className="text-xs font-black text-coffee-400 uppercase tracking-widest leading-none mb-1">Stock Actual</p>
+                       <p className="text-4xl font-black text-coffee-900">{selectedProduct.stock}</p>
                     </div>
                 </div>
 
                 {/* KPIs */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
                       <div className="flex items-center gap-2 text-blue-600 mb-2">
                          <ShoppingBag size={18} />
@@ -145,32 +152,32 @@ const ProductAnalysis = () => {
                    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
                       <div className="flex items-center gap-2 text-green-600 mb-2">
                          <DollarSign size={18} />
-                         <h4 className="font-black uppercase text-[10px] tracking-wider">Recaudación</h4>
+                         <h4 className="font-black uppercase text-[10px] tracking-wider">Ingresos</h4>
                       </div>
                       <p className="text-2xl font-black text-gray-800">${stats?.totalRevenue.toLocaleString()}</p>
                    </div>
                    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
                       <div className="flex items-center gap-2 text-coffee-600 mb-2">
                          <Briefcase size={18} />
-                         <h4 className="font-black uppercase text-[10px] tracking-wider">Utilidad Bruta</h4>
+                         <h4 className="font-black uppercase text-[10px] tracking-wider">Utilidad</h4>
                       </div>
                       <p className="text-2xl font-black text-coffee-900">${stats?.totalProfit.toLocaleString()}</p>
                    </div>
                    <div className="bg-amber-50 p-5 rounded-3xl border border-amber-100 shadow-sm">
                       <div className="flex items-center gap-2 text-amber-700 mb-2">
                          <Percent size={18} />
-                         <h4 className="font-black uppercase text-[10px] tracking-wider">Margen Real</h4>
+                         <h4 className="font-black uppercase text-[10px] tracking-wider">Margen</h4>
                       </div>
                       <p className="text-2xl font-black text-amber-900">{stats?.avgMargin.toFixed(1)}%</p>
                    </div>
                 </div>
 
-                {/* Gráfico Combinado */}
+                {/* Gráfico */}
                 <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-gray-100">
-                   <h4 className="font-black text-coffee-900 flex items-center gap-2 mb-8 uppercase text-xs tracking-widest">
-                      <TrendingUp size={16} /> Evolución Mensual
-                   </h4>
-                   <div className="h-80">
+                    <h4 className="font-black text-coffee-900 flex items-center gap-2 mb-8 uppercase text-xs tracking-widest">
+                      <TrendingUp size={16} /> Evolución del Producto
+                    </h4>
+                    <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                          <AreaChart data={historyData}>
                             <defs>
@@ -194,81 +201,57 @@ const ProductAnalysis = () => {
                             <Area name="Unidades" type="monotone" dataKey="units" stroke="#8a6256" strokeWidth={2} fillOpacity={0.1} fill="#8a6256" />
                          </AreaChart>
                       </ResponsiveContainer>
-                   </div>
+                    </div>
                 </div>
 
-                {/* Auditoría de Compras y Costos (PEPS) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   {/* Tabla de Resultados Financieros */}
-                   <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-                      <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-                         <h4 className="font-black text-[10px] uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                           <Layers size={14} /> Análisis Mensual PEPS
-                         </h4>
-                      </div>
-                      <div className="overflow-x-auto flex-1">
-                         <table className="w-full text-sm">
-                            <thead className="bg-coffee-900 text-white font-black text-[10px] uppercase">
-                               <tr>
-                                  <th className="p-3 text-left">Mes</th>
-                                  <th className="p-3 text-center">Unid.</th>
-                                  <th className="p-3 text-right">CMV PEPS</th>
-                                  <th className="p-3 text-right">Utilidad</th>
-                               </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                               {historyData.slice().reverse().map((row, idx) => (
-                                  <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                     <td className="p-3 font-bold text-gray-700 uppercase">{row.month}</td>
-                                     <td className="p-3 text-center font-bold text-gray-600">{row.units}</td>
-                                     <td className="p-3 text-right font-bold text-amber-700">${row.cogs.toLocaleString()}</td>
-                                     <td className="p-3 text-right font-black text-green-700">${row.profit.toLocaleString()}</td>
-                                  </tr>
-                               ))}
-                            </tbody>
-                         </table>
-                      </div>
+                {/* Registro de Compras con BOTÓN DE BORRAR */}
+                <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
+                   <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                      <h4 className="font-black text-[10px] uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                         <History size={14} /> Historial de Compras (Lotes)
+                      </h4>
                    </div>
-
-                   {/* Registro de Compras (Lotes de entrada) */}
-                   <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-                      <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-                         <h4 className="font-black text-[10px] uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                            <History size={14} /> Registro de Lotes (Compras)
-                         </h4>
-                      </div>
-                      <div className="overflow-y-auto flex-1 max-h-[400px]">
-                         <table className="w-full text-sm">
-                            <thead className="bg-gray-100 text-gray-500 font-black text-[10px] uppercase">
-                               <tr>
-                                  <th className="p-3 text-left">Fecha</th>
-                                  <th className="p-3 text-center">Cant.</th>
-                                  <th className="p-3 text-right">Costo U.</th>
-                                  <th className="p-3 text-right">Total</th>
+                   <div className="overflow-x-auto flex-1">
+                      <table className="w-full text-sm">
+                         <thead className="bg-gray-100 text-gray-500 font-black text-[10px] uppercase">
+                            <tr>
+                               <th className="p-3 text-left">Fecha</th>
+                               <th className="p-3 text-center">Cant.</th>
+                               <th className="p-3 text-right">Costo U.</th>
+                               <th className="p-3 text-right">Total</th>
+                               <th className="p-3 text-center">Acciones</th>
+                            </tr>
+                         </thead>
+                         <tbody className="divide-y divide-gray-50">
+                            {productPurchases.map((purchase) => (
+                               <tr key={purchase.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="p-3 text-xs font-medium text-gray-500">{new Date(purchase.date).toLocaleDateString()}</td>
+                                  <td className="p-3 text-center font-bold text-gray-700">{purchase.quantity}</td>
+                                  <td className="p-3 text-right font-bold text-coffee-600">${purchase.unitCost.toLocaleString()}</td>
+                                  <td className="p-3 text-right font-black text-gray-900">${purchase.totalCost.toLocaleString()}</td>
+                                  <td className="p-3 text-center">
+                                     <button 
+                                       onClick={() => handleDeletePurchase(purchase.id)}
+                                       className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                       title="Eliminar compra"
+                                     >
+                                       <Trash2 size={16} />
+                                     </button>
+                                  </td>
                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                               {productPurchases.map((purchase) => (
-                                  <tr key={purchase.id} className="hover:bg-gray-50 transition-colors">
-                                     <td className="p-3 text-xs font-medium text-gray-500">{new Date(purchase.date).toLocaleDateString()}</td>
-                                     <td className="p-3 text-center font-bold text-gray-700">{purchase.quantity}</td>
-                                     <td className="p-3 text-right font-bold text-coffee-600">${purchase.unitCost.toLocaleString()}</td>
-                                     <td className="p-3 text-right font-black text-gray-900">${purchase.totalCost.toLocaleString()}</td>
-                                  </tr>
-                               ))}
-                               {productPurchases.length === 0 && (
-                                  <tr>
-                                     <td colSpan={4} className="p-10 text-center text-gray-300 italic text-xs">
-                                        No hay compras adicionales registradas para este producto.
-                                     </td>
-                                  </tr>
-                               )}
-                            </tbody>
-                         </table>
-                      </div>
-                      <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-700 font-bold flex items-center gap-2">
-                         <PackageCheck size={14} /> El sistema usa estos lotes para calcular el costo de cada venta automáticamente.
-                      </div>
+                            ))}
+                            {productPurchases.length === 0 && (
+                               <tr>
+                                  <td colSpan={5} className="p-10 text-center text-gray-300 italic text-xs">
+                                     No hay compras registradas.
+                                  </td>
+                               </tr>
+                            )}
+                         </tbody>
+                      </table>
+                   </div>
+                   <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-700 font-bold flex items-center gap-2">
+                      <PackageCheck size={14} /> Al eliminar una compra, el stock del producto se restará automáticamente.
                    </div>
                 </div>
              </div>
@@ -277,8 +260,8 @@ const ProductAnalysis = () => {
                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg mb-6">
                    <Briefcase size={48} className="text-gray-200" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-400 uppercase tracking-widest">Auditoría PEPS</h3>
-                <p className="text-sm text-gray-400 max-w-xs mt-4">Selecciona un producto para analizar su rentabilidad real y ver el historial de costos de sus compras.</p>
+                <h3 className="text-xl font-bold text-gray-400 uppercase tracking-widest">Auditoría de Lotes</h3>
+                <p className="text-sm text-gray-400 max-w-xs mt-4">Selecciona un producto del menú lateral para ver su rendimiento y gestionar sus compras.</p>
              </div>
            )}
         </div>
