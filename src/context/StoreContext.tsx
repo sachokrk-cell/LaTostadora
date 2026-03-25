@@ -176,24 +176,47 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await syncEverythingToCloud(newState);
   };
 
-  const addPurchase = async (p: Purchase) => {
-    const newState = { ...state, purchases: [...state.purchases, p] };
+  // --- CORRECCIÓN DE COMPRAS: SUMAR STOCK AUTOMÁTICAMENTE ---
+  const addPurchase = async (purchase: Purchase) => {
+    const updatedProducts = state.products.map(p => {
+      if (p.id === purchase.productId) {
+        // Registramos el cambio de costo en el historial si es diferente
+        const historyEntry = p.costPrice !== purchase.unitCost ? [{
+          date: purchase.date,
+          oldCost: p.costPrice,
+          newCost: purchase.unitCost
+        }] : [];
+
+        return { 
+          ...p, 
+          stock: p.stock + purchase.quantity, // SUMAMOS EL STOCK
+          costPrice: purchase.unitCost,        // ACTUALIZAMOS EL COSTO
+          // Si tiene margen, recalculamos el precio de venta automáticamente
+          sellingPrice: p.marginPercentage > 0 ? Math.round(purchase.unitCost * (1 + p.marginPercentage / 100)) : p.sellingPrice,
+          history: [...(p.history || []), ...historyEntry]
+        };
+      }
+      return p;
+    });
+
+    const newState = { 
+      ...state, 
+      purchases: [...state.purchases, purchase],
+      products: updatedProducts 
+    };
+    
     setState(newState);
     await syncEverythingToCloud(newState);
   };
 
-  // --- CORRECCIÓN DE CONSUMO PROPIO ---
   const addConsumption = async (c: Consumption) => {
-    // 1. Buscamos el producto y le restamos el stock
     const updatedProducts = state.products.map(p => {
       if (p.id === c.productId) {
-        // Restamos la cantidad consumida asegurando que no baje de 0
         return { ...p, stock: Math.max(0, p.stock - c.quantity) };
       }
       return p;
     });
 
-    // 2. Creamos el nuevo estado con los productos actualizados y el consumo agregado
     const newState = { 
       ...state, 
       products: updatedProducts,
