@@ -13,7 +13,8 @@ interface StoreContextType extends AppState {
   deleteSale: (id: string) => Promise<void>;
   addPaymentToSale: (saleId: string, payment: PaymentRecord) => Promise<void>;
   addPurchase: (purchase: Purchase) => Promise<void>;
-  deletePurchase: (id: string) => Promise<void>; // Nueva función agregada
+  updatePurchase: (purchase: Purchase) => Promise<void>; // Nueva función
+  deletePurchase: (id: string) => Promise<void>;
   addConsumption: (consumption: Consumption) => Promise<void>;
   resetData: () => void;
   exportData: () => void;
@@ -183,7 +184,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return { 
           ...prod, 
           stock: Number(prod.stock) + Number(p.quantity),
-          costPrice: p.unitCost
+          costPrice: p.unitCost,
+          sellingPrice: prod.marginPercentage > 0 ? Math.round(p.unitCost * (1 + prod.marginPercentage / 100)) : prod.sellingPrice
         };
       }
       return prod;
@@ -194,12 +196,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await syncEverythingToCloud(newState);
   };
 
-  // --- NUEVA FUNCIÓN: BORRAR COMPRA Y REVERTIR STOCK ---
+  // --- NUEVA FUNCIÓN: EDITAR COMPRA Y AJUSTAR STOCK ---
+  const updatePurchase = async (updatedPurchase: Purchase) => {
+    const oldPurchase = state.purchases.find(p => p.id === updatedPurchase.id);
+    if (!oldPurchase) return;
+
+    // Calculamos la diferencia de stock (lo nuevo menos lo viejo)
+    const stockDiff = Number(updatedPurchase.quantity) - Number(oldPurchase.quantity);
+
+    const updatedProducts = state.products.map(p => {
+      if (p.id === updatedPurchase.productId) {
+        return {
+          ...p,
+          stock: Number(p.stock) + stockDiff, // Sumamos la diferencia (puede ser negativa si se bajó la cantidad)
+          costPrice: updatedPurchase.unitCost,
+          sellingPrice: p.marginPercentage > 0 ? Math.round(updatedPurchase.unitCost * (1 + p.marginPercentage / 100)) : p.sellingPrice
+        };
+      }
+      return p;
+    });
+
+    const newState = {
+      ...state,
+      purchases: state.purchases.map(p => p.id === updatedPurchase.id ? updatedPurchase : p),
+      products: updatedProducts
+    };
+
+    setState(newState);
+    await syncEverythingToCloud(newState);
+  };
+
   const deletePurchase = async (id: string) => {
     const purchaseToDelete = state.purchases.find(p => p.id === id);
     if (!purchaseToDelete) return;
 
-    // Revertimos el stock: restamos lo que se había sumado
     const updatedProducts = state.products.map(prod => {
       if (prod.id === purchaseToDelete.productId) {
         return { 
@@ -272,7 +302,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addProduct, updateProduct, deleteProduct, 
         addClient, updateClient, deleteClient, 
         addSale, deleteSale, addPaymentToSale,
-        addPurchase, deletePurchase, addConsumption,
+        addPurchase, updatePurchase, deletePurchase, addConsumption,
         resetData, exportData, importData,
         isSaveLocked, toggleSaveLock, 
         dataSize, isLoading, syncStatus,
