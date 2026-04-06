@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
 import { 
@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 
 const Inventory = () => {
-  // Obtenemos stockThreshold desde el Store (Supabase) en lugar de localStorage
   const { 
     products, 
     addProduct, 
@@ -39,6 +38,18 @@ const Inventory = () => {
   });
   const [purchaseData, setPurchaseData] = useState({ quantity: 0, unitCost: 0, date: new Date().toISOString().split('T')[0] });
   const [consumptionData, setConsumptionData] = useState({ quantity: 1, date: new Date().toISOString().split('T')[0] });
+
+  // --- MEJORA: AUTO-CALCULO DE PRECIO DE VENTA ---
+  useEffect(() => {
+    if (isModalOpen) {
+      const cost = Number(formData.costPrice) || 0;
+      const margin = Number(formData.marginPercentage) || 0;
+      const calculatedPrice = Math.round(cost * (1 + margin / 100));
+      if (calculatedPrice !== formData.sellingPrice) {
+        setFormData(prev => ({ ...prev, sellingPrice: calculatedPrice }));
+      }
+    }
+  }, [formData.costPrice, formData.marginPercentage]);
 
   const inventoryTotals = useMemo(() => {
     return products.reduce((acc, p) => {
@@ -77,7 +88,7 @@ const Inventory = () => {
     setIsConsumptionModalOpen(true);
   };
 
-  const handleSubmitProduct = (e: React.FormEvent) => {
+  const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
     const productToSave: Product = {
@@ -92,8 +103,8 @@ const Inventory = () => {
       imageUrl: formData.imageUrl || 'https://via.placeholder.com/200?text=No+Image',
       history: selectedProduct ? selectedProduct.history : []
     };
-    if (selectedProduct) updateProduct(productToSave);
-    else addProduct(productToSave);
+    if (selectedProduct) await updateProduct(productToSave);
+    else await addProduct(productToSave);
     setIsModalOpen(false);
   };
 
@@ -277,9 +288,9 @@ const Inventory = () => {
               </div>
               <div className="p-8 space-y-6">
                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Producto: <span className="text-[#1C1C1C]">{selectedProduct.name}</span></p>
-                 <form onSubmit={(e) => {
+                 <form onSubmit={async (e) => {
                     e.preventDefault();
-                    addPurchase({
+                    await addPurchase({
                       id: crypto.randomUUID(),
                       date: new Date(purchaseData.date).toISOString(),
                       productId: selectedProduct.id,
@@ -321,13 +332,15 @@ const Inventory = () => {
                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Producto a retirar:</p>
                  <p className="text-2xl font-black uppercase italic tracking-tighter text-[#1C1C1C]">{selectedProduct.name}</p>
                  
-                 <form onSubmit={(e) => {
+                 <form onSubmit={async (e) => {
                     e.preventDefault();
                     if (consumptionData.quantity > selectedProduct.stock) { alert("Stock insuficiente."); return; }
-                    addConsumption({
+                    
+                    // CORRECCIÓN: Usar nombres de campos consistentes con la DB
+                    await addConsumption({
                       id: crypto.randomUUID(),
                       date: new Date(consumptionData.date).toISOString(),
-                      productId: selectedProduct.id,
+                      productId: selectedProduct.id, 
                       productName: selectedProduct.name,
                       quantity: Number(consumptionData.quantity),
                       reason: "Consumo Propio / Interno"
@@ -351,7 +364,7 @@ const Inventory = () => {
               <h3 className="text-xl font-black uppercase mb-2">¿Eliminar {productToDelete.name}?</h3>
               <p className="text-xs font-bold text-gray-500 mb-8 leading-relaxed">Se perderán todos los registros de compras y ventas históricos de esta variedad.</p>
               <div className="flex flex-col gap-3">
-                <button onClick={() => { deleteProduct(productToDelete.id); setIsDeleteModalOpen(false); }} className="w-full py-5 bg-red-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-all">Sí, Eliminar de Todo</button>
+                <button onClick={async () => { await deleteProduct(productToDelete.id); setIsDeleteModalOpen(false); }} className="w-full py-5 bg-red-600 text-white rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-all">Sí, Eliminar de Todo</button>
                 <button onClick={() => setIsDeleteModalOpen(false)} className="w-full py-5 bg-gray-100 text-gray-900 rounded-2xl font-black uppercase">Cancelar</button>
               </div>
            </div>
