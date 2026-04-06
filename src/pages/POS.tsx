@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product, CartItem, Client, Sale } from '../types';
-import { Search, Plus, Minus, Trash, User, ShoppingCart, CheckCircle, Calendar, ArrowLeft, X, ShoppingBag as ShoppingBagIcon, Wallet, CreditCard, AlertCircle } from 'lucide-react';
+import { Search, Plus, Minus, Trash, User, ShoppingCart, CheckCircle, ArrowLeft, X, ShoppingBag as ShoppingBagIcon, Wallet, CreditCard, AlertCircle, ChevronRight } from 'lucide-react';
 
 interface CartContentProps {
   cart: CartItem[];
@@ -31,138 +30,151 @@ const CartContent: React.FC<CartContentProps> = ({
   cart, selectedClient, saleDate, discount, subtotal, total, totalItems, successMsg,
   paymentMethod, amountPaid,
   onUpdateQuantity, onRemoveFromCart, onSetSelectedClient, onShowClientModal,
-  onSetSaleDate, onSetDiscount, onSetPaymentMethod, onSetAmountPaid, onCheckout, onCloseMobileCart
+  onSetDiscount, onSetPaymentMethod, onSetAmountPaid, onCheckout, onCloseMobileCart
 }) => {
   const balance = total - amountPaid;
   const isDebt = balance > 0;
 
   return (
-    <>
-      <div className="p-6 bg-coffee-900 text-white shadow-md flex-shrink-0">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <button onClick={onCloseMobileCart} className="md:hidden mr-2">
-                <ArrowLeft />
+    <div className="flex flex-col h-full bg-white">
+      {/* HEADER DEL CARRITO */}
+      <div className="p-6 bg-[#1C1C1C] text-white flex-shrink-0 border-b-4 border-[#6B7A3A]">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <button onClick={onCloseMobileCart} className="md:hidden p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors">
+                <ArrowLeft size={24} />
             </button>
-            <h2 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Orden</h2>
+            <h2 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-2">
+              <ShoppingCart size={20} className="text-[#6B7A3A]" /> Orden
+            </h2>
           </div>
+          <span className="bg-[#6B7A3A] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase">
+            {totalItems} Items
+          </span>
+        </div>
+
+        <div className="mt-6">
           {selectedClient ? (
-              <div className="flex items-center gap-2 bg-coffee-800 px-3 py-1 rounded-full text-sm border border-coffee-700">
-                <User size={14} />
-                <span className="truncate max-w-[100px] font-bold">{selectedClient.name}</span>
-                <button onClick={() => onSetSelectedClient(null)} className="ml-2 hover:text-red-300">x</button>
+              <div className="flex items-center justify-between bg-white/10 p-3 rounded-2xl border border-white/10 backdrop-blur-sm">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="w-8 h-8 rounded-full bg-[#6B7A3A] flex items-center justify-center text-[10px] font-black">
+                    {selectedClient.name.charAt(0)}
+                  </div>
+                  <span className="truncate font-black text-sm uppercase tracking-tight">{selectedClient.name}</span>
+                </div>
+                <button onClick={() => onSetSelectedClient(null)} className="p-2 hover:text-red-400 transition-colors">
+                  <X size={18} />
+                </button>
               </div>
           ) : (
-            <button onClick={onShowClientModal} className="text-xs bg-coffee-700 hover:bg-coffee-600 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap border border-coffee-600 font-bold">
-              + Seleccionar Cliente
+            <button onClick={onShowClientModal} className="w-full py-3 px-4 bg-[#6B7A3A] hover:bg-[#5a6932] rounded-2xl transition-all border-b-4 border-[#4d5828] text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+              <User size={14} /> Seleccionar Cliente
             </button>
           )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
+      {/* ITEMS DEL CARRITO */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {cart.length === 0 ? (
-            <div className="text-center text-gray-400 mt-10">
-              <ShoppingBagIcon size={48} className="mx-auto mb-2 opacity-20" />
-              <p>El carrito está vacío</p>
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
+              <ShoppingBagIcon size={64} className="mb-4" />
+              <p className="font-black uppercase text-xs tracking-[0.2em]">Carrito Vacío</p>
             </div>
           ) : (
             cart.map(item => (
-              <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <div className="flex-1 min-w-0 mr-2">
-                  <h4 className="font-bold text-gray-800 truncate text-sm">{item.name}</h4>
-                  <p className="text-xs text-coffee-600 font-black">${item.appliedPrice}</p>
+              <div key={item.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-2xl border-2 border-gray-100 group">
+                <div className="flex-1 min-w-0 mr-4">
+                  <h4 className="font-black text-[#1C1C1C] truncate text-sm uppercase leading-none mb-1">{item.name}</h4>
+                  <p className="text-[10px] text-[#6B7A3A] font-black uppercase">${item.appliedPrice.toLocaleString()} c/u</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => onUpdateQuantity(item.id, -1)} className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"><Minus size={14} /></button>
-                  <span className="font-black w-6 text-center text-gray-900 text-sm">{item.quantity}</span>
-                  <button onClick={() => onUpdateQuantity(item.id, 1)} className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"><Plus size={14} /></button>
-                  <button onClick={() => onRemoveFromCart(item.id)} className="text-red-400 hover:text-red-600 ml-1 p-1"><Trash size={16} /></button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <button onClick={() => onUpdateQuantity(item.id, -1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 text-[#1C1C1C]"><Minus size={14} /></button>
+                    <span className="font-black w-8 text-center text-sm">{item.quantity}</span>
+                    <button onClick={() => onUpdateQuantity(item.id, 1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 text-[#1C1C1C]"><Plus size={14} /></button>
+                  </div>
+                  <button onClick={() => onRemoveFromCart(item.id)} className="text-gray-300 hover:text-red-500 transition-colors"><Trash size={18} /></button>
                 </div>
               </div>
             ))
           )}
       </div>
 
-      <div className="p-4 md:p-6 bg-gray-50 border-t flex-shrink-0 space-y-4">
-        {/* Payment Logic */}
-        <div className="space-y-3">
-            <div className="flex items-center gap-3">
-               <button 
-                 onClick={() => onSetPaymentMethod('Efectivo')}
-                 className={`flex-1 flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${paymentMethod === 'Efectivo' ? 'border-coffee-600 bg-coffee-50 text-coffee-800' : 'border-gray-200 bg-white text-gray-400'}`}
-               >
-                 <Wallet size={18} />
-                 <span className="text-[10px] font-black uppercase">Efectivo</span>
-               </button>
-               <button 
-                 onClick={() => onSetPaymentMethod('Transferencia')}
-                 className={`flex-1 flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${paymentMethod === 'Transferencia' ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-400'}`}
-               >
-                 <CreditCard size={18} />
-                 <span className="text-[10px] font-black uppercase">Transfer</span>
-               </button>
-            </div>
-
-            <div className="bg-white p-3 rounded-xl border border-gray-200 space-y-2">
-                <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500">Monto Abonado</span>
-                    <div className="relative">
-                        <span className="absolute left-2 top-1.5 text-gray-400 text-xs">$</span>
-                        <input 
-                           type="number"
-                           className="w-24 pl-5 pr-2 py-1 border rounded-lg text-right font-black text-coffee-700 bg-gray-50 focus:bg-white transition-colors outline-none"
-                           value={amountPaid === 0 ? '' : amountPaid}
-                           placeholder={total.toString()}
-                           onChange={(e) => onSetAmountPaid(e.target.value === '' ? 0 : Number(e.target.value))}
-                        />
-                    </div>
-                </div>
-                {isDebt && (
-                    <div className="flex justify-between items-center text-xs">
-                        <span className="text-red-500 font-bold flex items-center gap-1"><AlertCircle size={12}/> Saldo Pendiente</span>
-                        <span className="text-red-600 font-black">${balance.toLocaleString()}</span>
-                    </div>
-                )}
-            </div>
+      {/* RESUMEN Y PAGO */}
+      <div className="p-6 bg-gray-50 border-t-2 border-gray-100 space-y-6 flex-shrink-0">
+        <div className="grid grid-cols-2 gap-3">
+           <button 
+             onClick={() => onSetPaymentMethod('Efectivo')}
+             className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${paymentMethod === 'Efectivo' ? 'border-[#6B7A3A] bg-white shadow-md text-[#6B7A3A]' : 'border-gray-200 text-gray-400 opacity-50'}`}
+           >
+             <Wallet size={20} />
+             <span className="text-[10px] font-black uppercase tracking-widest">Efectivo</span>
+           </button>
+           <button 
+             onClick={() => onSetPaymentMethod('Transferencia')}
+             className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${paymentMethod === 'Transferencia' ? 'border-[#1C1C1C] bg-white shadow-md text-[#1C1C1C]' : 'border-gray-200 text-gray-400 opacity-50'}`}
+           >
+             <CreditCard size={20} />
+             <span className="text-[10px] font-black uppercase tracking-widest">Transfer</span>
+           </button>
         </div>
 
-        <div className="space-y-2 mb-2 border-t pt-2">
-            <div className="flex justify-between text-xs text-gray-500 font-medium">
-              <span>Subtotal</span>
-              <span>${subtotal.toLocaleString()}</span>
+        <div className="bg-white p-4 rounded-[2rem] border-2 border-gray-100 space-y-4 shadow-sm">
+            <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Monto Recibido</span>
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
+                    <input 
+                       type="number"
+                       className="w-32 pl-7 pr-4 py-2 border-2 border-gray-100 rounded-xl text-right font-black text-lg text-[#1C1C1C] outline-none focus:border-[#6B7A3A] transition-all"
+                       value={amountPaid === 0 ? '' : amountPaid}
+                       placeholder={total.toString()}
+                       onChange={(e) => onSetAmountPaid(e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                </div>
             </div>
-            <div className="flex justify-between text-xs text-gray-500 font-medium items-center">
-              <span>Descuento ($)</span>
-              <input 
-                type="number" 
-                value={discount === 0 ? '' : discount} 
-                onChange={e => onSetDiscount(Number(e.target.value))}
-                className="w-20 text-right border rounded-lg px-2 py-0.5 bg-white text-gray-900"
-                placeholder="0"
-              />
-            </div>
-            <div className="flex justify-between text-xl font-black text-coffee-900">
-              <span>TOTAL</span>
-              <span>${total.toLocaleString()}</span>
+
+            {isDebt && (
+                <div className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100 animate-pulse">
+                    <span className="text-[10px] text-red-600 font-black uppercase flex items-center gap-1"><AlertCircle size={14}/> Saldo a Deber</span>
+                    <span className="text-sm text-red-600 font-black">${balance.toLocaleString()}</span>
+                </div>
+            )}
+
+            <div className="pt-4 border-t border-gray-100 space-y-2">
+                <div className="flex justify-between items-center text-xs text-gray-400 font-bold">
+                  <span className="uppercase tracking-widest">Descuento</span>
+                  <input 
+                    type="number" 
+                    value={discount === 0 ? '' : discount} 
+                    onChange={e => onSetDiscount(Number(e.target.value))}
+                    className="w-16 text-right font-black text-[#6B7A3A] outline-none"
+                    placeholder="0"
+                  />
+                </div>
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black uppercase text-[#1C1C1C] tracking-widest">Total a Cobrar</span>
+                  <span className="text-4xl font-black text-[#1C1C1C] tracking-tighter leading-none">${total.toLocaleString()}</span>
+                </div>
             </div>
         </div>
         
         <button 
           disabled={cart.length === 0 || (isDebt && !selectedClient)}
           onClick={onCheckout}
-          className={`w-full py-4 rounded-2xl font-black text-lg shadow-lg flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${cart.length > 0 && !(isDebt && !selectedClient) ? 'bg-coffee-600 text-white hover:bg-coffee-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+          className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-xl flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${cart.length > 0 && !(isDebt && !selectedClient) ? 'bg-[#1C1C1C] text-[#E8DFC8] hover:bg-[#6B7A3A]' : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'}`}
         >
-          <div className="flex items-center gap-2">
-            {successMsg ? <CheckCircle /> : 'Finalizar Venta'}
+          <div className="flex items-center gap-3">
+            {successMsg ? <CheckCircle size={28} /> : 'Confirmar Venta'}
           </div>
           {isDebt && !selectedClient && (
-            <span className="text-[10px] uppercase tracking-tighter text-red-100">Seleccione cliente para fiado</span>
+            <span className="text-[8px] uppercase tracking-widest text-red-500 font-black">Asigna un cliente para el saldo</span>
           )}
-          {successMsg && <span className="text-xs">{successMsg}</span>}
+          {successMsg && <span className="text-xs font-black italic">{successMsg}</span>}
         </button>
       </div>
-    </>
+    </div>
   );
 };
 
@@ -185,7 +197,6 @@ const POS = () => {
   const total = subtotal - discount;
   const totalItems = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
 
-  // Sync amountPaid with total when cart changes, unless user touched it
   useEffect(() => {
     setAmountPaid(total);
   }, [total]);
@@ -194,9 +205,7 @@ const POS = () => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        return prev.map(item => 
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
+        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { ...product, quantity: 1, appliedPrice: product.sellingPrice }];
     });
@@ -253,12 +262,11 @@ const POS = () => {
       }] : []
     });
 
-    setSuccessMsg('Venta Realizada!');
+    setSuccessMsg('¡VENTA EXITOSA! ☕');
     setCart([]);
     setSelectedClient(null);
     setDiscount(0);
     setAmountPaid(0);
-    setSaleDate(new Date().toISOString().split('T')[0]);
     setTimeout(() => {
         setSuccessMsg('');
         setIsMobileCartOpen(false);
@@ -269,46 +277,51 @@ const POS = () => {
   const filteredClients = useMemo(() => clients.filter(c => c.name.toLowerCase().includes(clientSearchTerm.toLowerCase())), [clients, clientSearchTerm]);
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-gray-100 overflow-hidden relative">
-      <div className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden">
-        <div className="mb-4 md:mb-6">
-          <div className="relative">
-             <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+    <div className="h-screen flex flex-col md:flex-row bg-white overflow-hidden relative">
+      
+      {/* AREA DE SELECCIÓN DE PRODUCTOS */}
+      <div className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden bg-white">
+        <div className="mb-6">
+          <div className="relative group">
+             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#6B7A3A] transition-colors" size={24} />
              <input 
-              className="w-full pl-10 pr-4 py-3 rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-coffee-500 text-base md:text-lg bg-white text-gray-900" 
-              placeholder="Buscar productos..." 
+              className="w-full pl-14 pr-6 py-5 rounded-[2rem] border-2 border-gray-50 bg-gray-50 focus:bg-white focus:border-[#6B7A3A] shadow-sm text-lg font-bold outline-none transition-all text-[#1C1C1C]" 
+              placeholder="Buscar por variedad o categoría..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pb-24 md:pb-20">
+        {/* GRILLA DE PRODUCTOS RESPONSIVA */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 overflow-y-auto pb-32 custom-scrollbar">
           {filteredProducts.map(product => (
             <button 
               key={product.id}
               onClick={() => addToCart(product)}
               disabled={product.stock <= 0}
-              className={`bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-all text-left flex flex-row md:flex-col gap-4 md:gap-0 items-center md:items-stretch h-auto md:h-full border-2 border-transparent ${product.stock <= 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-coffee-300'}`}
+              className={`bg-white p-4 rounded-[2rem] border-2 transition-all flex flex-row items-center gap-4 text-left shadow-sm hover:shadow-md active:scale-[0.97] ${product.stock <= 0 ? 'opacity-30 grayscale cursor-not-allowed border-gray-100' : 'border-gray-50 hover:border-[#6B7A3A]'}`}
             >
-              <div className="w-16 h-16 md:w-full md:h-28 md:mb-3 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+              <div className="w-20 h-20 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-inner">
                 <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
               </div>
-              <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
-                <h3 className="font-bold text-gray-800 line-clamp-2 text-sm md:text-base">{product.name}</h3>
-                <div className="mt-1 md:mt-auto pt-0 md:pt-2 flex flex-col md:flex-row md:justify-between md:items-center">
-                  <span className="font-black text-lg text-coffee-600">${product.sellingPrice}</span>
-                  <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full w-fit mt-1 md:mt-0 ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {product.stock} disp
-                  </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-black text-[#1C1C1C] text-sm uppercase leading-tight mb-1 truncate">{product.name}</h3>
+                <p className="text-xl font-black text-[#6B7A3A] tracking-tighter">${product.sellingPrice}</p>
+                <div className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full w-fit mt-1 border ${product.stock > 10 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                  {product.stock} en stock
                 </div>
+              </div>
+              <div className="p-2 bg-gray-50 rounded-full text-[#1C1C1C] group-hover:bg-[#6B7A3A] group-hover:text-white transition-colors">
+                <Plus size={20} />
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="hidden md:flex w-96 bg-white shadow-2xl flex-col border-l border-gray-200 z-10">
+      {/* CARRITO PARA ESCRITORIO (SIDEBAR) */}
+      <div className="hidden md:flex w-[400px] bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.03)] flex-col border-l-2 border-gray-50 z-10">
          <CartContent 
             cart={cart}
             selectedClient={selectedClient}
@@ -333,25 +346,27 @@ const POS = () => {
          />
       </div>
 
-      {cart.length > 0 && (
-         <div className="md:hidden fixed bottom-6 right-6 left-6 z-20">
+      {/* BOTÓN FLOTANTE MÓVIL (TIPO APP) */}
+      {cart.length > 0 && !isMobileCartOpen && (
+         <div className="md:hidden fixed bottom-24 right-6 left-6 z-[100] animate-bounce-in">
             <button 
               onClick={() => setIsMobileCartOpen(true)}
-              className="w-full bg-coffee-600 text-white rounded-2xl py-4 px-6 shadow-2xl flex justify-between items-center animate-bounce-in"
+              className="w-full bg-[#1C1C1C] text-white rounded-[2rem] py-5 px-8 shadow-2xl flex justify-between items-center border-b-8 border-[#6B7A3A] active:scale-95 transition-all"
             >
-               <div className="flex items-center gap-2">
-                 <div className="bg-white text-coffee-600 w-8 h-8 rounded-full flex items-center justify-center font-black">
+               <div className="flex items-center gap-3">
+                 <div className="bg-[#6B7A3A] text-white w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">
                     {totalItems}
                  </div>
-                 <span className="font-black">Ver Carrito</span>
+                 <span className="font-black uppercase tracking-widest text-sm">Ver Carrito</span>
                </div>
-               <span className="font-black text-xl">${total.toLocaleString()}</span>
+               <span className="font-black text-2xl tracking-tighter">${total.toLocaleString()}</span>
             </button>
          </div>
       )}
 
+      {/* CARRITO MÓVIL (OVERLAY FULLSCREEN) */}
       {isMobileCartOpen && (
-        <div className="md:hidden fixed inset-0 bg-white z-30 flex flex-col animate-slide-up">
+        <div className="md:hidden fixed inset-0 bg-white z-[110] flex flex-col animate-slide-up">
            <CartContent 
                 cart={cart}
                 selectedClient={selectedClient}
@@ -377,48 +392,50 @@ const POS = () => {
         </div>
       )}
 
+      {/* MODAL SELECCIONAR CLIENTE - ESTILO PREMIUM */}
       {showClientModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[85vh] flex flex-col shadow-2xl animate-scale-up">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="font-black text-xl text-coffee-900">Seleccionar Cliente</h3>
-               <button onClick={() => {setShowClientModal(false); setClientSearchTerm('');}} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={20}/></button>
+        <div className="fixed inset-0 bg-[#1C1C1C]/90 flex items-end sm:items-center justify-center z-[150] p-0 sm:p-4 backdrop-blur-md">
+          <div className="bg-white rounded-t-[3rem] sm:rounded-[3rem] w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl animate-slide-up border-t-8 border-[#6B7A3A]">
+             <div className="p-8 flex justify-between items-center">
+               <h3 className="font-black text-2xl text-[#1C1C1C] uppercase italic tracking-tighter leading-none">Clientes</h3>
+               <button onClick={() => {setShowClientModal(false); setClientSearchTerm('');}} className="p-3 hover:bg-gray-100 rounded-full transition-all text-[#1C1C1C]"><X size={28}/></button>
              </div>
-             <div className="relative mb-4">
-               <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-               <input 
-                 autoFocus
-                 type="text" 
-                 placeholder="Buscar por nombre..." 
-                 className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-coffee-500 outline-none text-gray-900 font-bold"
-                 value={clientSearchTerm}
-                 onChange={(e) => setClientSearchTerm(e.target.value)}
-               />
+             
+             <div className="px-8 mb-6">
+               <div className="relative">
+                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                 <input 
+                   autoFocus
+                   type="text" 
+                   placeholder="Nombre del cliente..." 
+                   className="w-full pl-12 pr-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-[#6B7A3A] outline-none text-[#1C1C1C] font-bold transition-all"
+                   value={clientSearchTerm}
+                   onChange={(e) => setClientSearchTerm(e.target.value)}
+                 />
+               </div>
              </div>
-             <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
-               {filteredClients.map(c => (
-                 <div 
-                   key={c.id} 
-                   onClick={() => { setSelectedClient(c); setShowClientModal(false); setClientSearchTerm(''); }}
-                   className="p-4 hover:bg-coffee-50 cursor-pointer border-b last:border-0 rounded-xl transition-colors group"
-                 >
-                   <div className="flex justify-between items-center">
-                     <div>
-                       <p className="font-bold text-gray-900 group-hover:text-coffee-700">{c.name}</p>
-                       <p className="text-[10px] text-gray-400 font-bold uppercase">{c.email || c.phone || 'Sin contacto'}</p>
+
+             <div className="overflow-y-auto flex-1 px-8 pb-8 custom-scrollbar">
+               <div className="space-y-3">
+                 {filteredClients.map(c => (
+                   <div 
+                     key={c.id} 
+                     onClick={() => { setSelectedClient(c); setShowClientModal(false); setClientSearchTerm(''); }}
+                     className="p-5 bg-gray-50 hover:bg-[#6B7A3A] group cursor-pointer rounded-2xl transition-all border-2 border-transparent hover:border-[#6B7A3A] flex justify-between items-center"
+                   >
+                     <div className="min-w-0">
+                       <p className="font-black text-[#1C1C1C] group-hover:text-white uppercase text-sm truncate transition-colors">{c.name}</p>
+                       <p className="text-[10px] text-gray-400 group-hover:text-white/60 font-bold uppercase transition-colors">{c.phone || 'Sin número'}</p>
                      </div>
-                     <span className="text-xs font-black text-coffee-600 bg-coffee-50 px-3 py-1 rounded-full border border-coffee-100">
-                       ${c.totalSpent.toLocaleString()}
-                     </span>
+                     <ChevronRight size={20} className="text-gray-300 group-hover:text-white transition-colors" />
                    </div>
-                 </div>
-               ))}
-               {filteredClients.length === 0 && (
-                 <div className="text-center py-10 text-gray-400">
-                   <User size={32} className="mx-auto mb-2 opacity-20" />
-                   <p className="text-sm">No se encontraron clientes.</p>
-                 </div>
-               )}
+                 ))}
+                 {filteredClients.length === 0 && (
+                   <div className="text-center py-20 text-gray-300 font-black uppercase text-xs tracking-widest italic">
+                     No hay coincidencias
+                   </div>
+                 )}
+               </div>
              </div>
           </div>
         </div>
