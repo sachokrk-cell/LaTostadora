@@ -13,308 +13,229 @@ interface StoreContextType extends AppState {
   deleteSale: (id: string) => Promise<void>;
   addPaymentToSale: (saleId: string, payment: PaymentRecord) => Promise<void>;
   addPurchase: (purchase: Purchase) => Promise<void>;
-  updatePurchase: (purchase: Purchase) => Promise<void>; // Nueva función
+  updatePurchase: (purchase: Purchase) => Promise<void>;
   deletePurchase: (id: string) => Promise<void>;
   addConsumption: (consumption: Consumption) => Promise<void>;
-  resetData: () => void;
-  exportData: () => void;
-  importData: (jsonData: string) => Promise<void>;
-  isSaveLocked: boolean;
-  toggleSaveLock: () => void;
-  dataSize: string;
+  
+  // Ajustes Globales Sincronizados
+  monthlyGoal: number;
+  stockThreshold: number;
+  updateGlobalSettings: (goal: number, threshold: number) => Promise<void>;
+
   isLoading: boolean;
-  syncStatus: 'connected' | 'syncing' | 'error' | 'none';
-  pushToCloud: () => Promise<void>;
-  pullFromCloud: () => Promise<void>;
-  setSyncId: (id: string | undefined) => Promise<boolean>;
-  createSyncSession: () => Promise<string>;
-  isSyncing: boolean;
+  refreshData: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('coffeemaster_data');
-    return saved ? JSON.parse(saved) : {
-      products: [],
-      clients: [],
-      sales: [],
-      purchases: [],
-      consumptions: []
-    };
-  });
+  const [products, setProducts] = useState<Product[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [consumptions, setConsumptions] = useState<Consumption[]>([]);
+  
+  const [monthlyGoal, setMonthlyGoal] = useState(1000000);
+  const [stockThreshold, setStockThreshold] = useState(10);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [isSaveLocked, setIsSaveLocked] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error' | 'none'>(state.syncId ? 'connected' : 'none');
-  const [isLoading, setIsLoading] = useState(false);
+  // 1. CARGA INICIAL DESDE SUPABASE (MULTIDISPOSITIVO)
+  const refreshData = async () => {
+    setIsLoading(true);
+    try {
+      const [
+        { data: p }, { data: c }, { data: s }, { data: cons }, { data: sett }
+      ] = await Promise.all([
+        supabase.from('products').select('*'),
+        supabase.from('clients').select('*'),
+        supabase.from('sales').select('*, items:sale_items(*)'), // Trae venta con sus items
+        supabase.from('consumptions').select('*'),
+        supabase.from('settings').select('*').eq('id', 'global_config').single()
+      ]);
+
+      if (p) setProducts(p);
+      if (c) setClients(c);
+      if (s) setSales(s);
+      if (cons) setConsumptions(cons);
+      if (sett) {
+        setMonthlyGoal(sett.monthly_goal);
+        setStockThreshold(sett.stock_threshold);
+      }
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!isSaveLocked) {
-      localStorage.setItem('coffeemaster_data', JSON.stringify(state));
-    }
-  }, [state, isSaveLocked]);
+    refreshData();
+  }, []);
 
-  const syncEverythingToCloud = async (currentState: AppState) => {
-    if (!currentState.syncId) return;
-    try {
-      const { error } = await supabase
-        .from('coffee_sync')
-        .upsert({ 
-          id: currentState.syncId, 
-          data: currentState,
-          updated_at: new Date().toISOString() 
-        });
-      if (error) throw error;
-    } catch (e) {
-      console.error("Error sincronizando:", e);
+  // 2. GESTIÓN DE AJUSTES GLOBALES
+  const updateGlobalSettings = async (goal: number, threshold: number) => {
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ id: 'global_config', monthly_goal: goal, stock_threshold: threshold });
+
+    if (!error) {
+      setMonthlyGoal(goal);
+      setStockThreshold(threshold);
     }
   };
 
-  const pullFromCloud = async () => {
-    if (!state.syncId) return;
-    setSyncStatus('syncing');
-    try {
-      const { data, error } = await supabase
-        .from('coffee_sync')
-        .select('data')
-        .eq('id', state.syncId)
-        .single();
-      
-      if (error) throw error;
-      if (data) {
-        setState(data.data);
-      }
-      setSyncStatus('connected');
-    } catch (e) {
-      setSyncStatus('error');
-    }
-  };
-
+  // 3. PRODUCTOS
   const addProduct = async (p: Product) => {
-    const newState = { ...state, products: [...state.products, p] };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('products').insert([p]);
+    if (!error) setProducts(prev => [...prev, p]);
   };
 
   const updateProduct = async (p: Product) => {
-    const newState = { ...state, products: state.products.map(old => old.id === p.id ? p : old) };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('products').update(p).eq('id', p.id);
+    if (!error) setProducts(prev => prev.map(old => old.id === p.id ? p : old));
   };
 
   const deleteProduct = async (id: string) => {
-    const newState = { ...state, products: state.products.filter(p => p.id !== id) };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (!error) setProducts(prev => prev.filter(p => p.id !== id));
   };
 
+  // 4. CLIENTES
   const addClient = async (c: Client) => {
-    const newState = { ...state, clients: [...state.clients, c] };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('clients').insert([c]);
+    if (!error) setClients(prev => [...prev, c]);
   };
 
   const updateClient = async (c: Client) => {
-    const newState = { ...state, clients: state.clients.map(old => old.id === c.id ? c : old) };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('clients').update(c).eq('id', c.id);
+    if (!error) setClients(prev => prev.map(old => old.id === c.id ? c : old));
   };
 
   const deleteClient = async (id: string) => {
-    const newState = { ...state, clients: state.clients.filter(c => c.id !== id) };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (!error) setClients(prev => prev.filter(c => c.id !== id));
   };
 
+  // 5. VENTAS (OPERACIÓN COMPLEJA)
   const addSale = async (s: Sale) => {
-    const updatedProducts = state.products.map(p => {
-      const itemInCart = s.items.find(item => item.id === p.id);
-      if (itemInCart) {
-        return { ...p, stock: p.stock - itemInCart.quantity };
-      }
-      return p;
-    });
+    // a. Insertar cabecera de venta
+    const { error: saleError } = await supabase.from('sales').insert([{
+      id: s.id,
+      client_id: s.clientId,
+      client_name: s.clientName,
+      date: s.date,
+      subtotal: s.subtotal,
+      discount_amount: s.discountAmount,
+      total: s.total,
+      payment_method: s.paymentMethod,
+      amount_paid: s.amountPaid,
+      balance: s.balance
+    }]);
 
-    const updatedClients = state.clients.map(c => {
-      if (c.id === s.clientId) {
-        return { ...c, totalSpent: c.totalSpent + s.total };
-      }
-      return c;
-    });
+    if (saleError) return;
 
-    const newState = { 
-      ...state, 
-      sales: [...state.sales, s],
-      products: updatedProducts,
-      clients: updatedClients
-    };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    // b. Insertar items de la venta
+    const itemsToInsert = s.items.map(item => ({
+      sale_id: s.id,
+      product_id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      applied_price: item.appliedPrice
+    }));
+    await supabase.from('sale_items').insert(itemsToInsert);
+
+    // c. Actualizar stock en DB y locales
+    for (const item of s.items) {
+      const product = products.find(p => p.id === item.id);
+      if (product) {
+        const newStock = product.stock - item.quantity;
+        await supabase.from('products').update({ stock: newStock }).eq('id', product.id);
+      }
+    }
+
+    // d. Actualizar gasto total del cliente
+    if (s.clientId) {
+        const client = clients.find(c => c.id === s.clientId);
+        if (client) {
+            await supabase.from('clients').update({ total_spent: client.totalSpent + s.total }).eq('id', client.id);
+        }
+    }
+
+    refreshData(); // Recargar todo para asegurar sincronía
   };
 
   const deleteSale = async (id: string) => {
-    const newState = { ...state, sales: state.sales.filter(s => s.id !== id) };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const { error } = await supabase.from('sales').delete().eq('id', id);
+    if (!error) refreshData();
   };
 
   const addPaymentToSale = async (saleId: string, payment: PaymentRecord) => {
-    const newState = {
-      ...state,
-      sales: state.sales.map(s => {
-        if (s.id === saleId) {
-          return {
-            ...s,
-            amountPaid: s.amountPaid + payment.amount,
-            balance: s.balance - payment.amount,
-            payments: [...(s.payments || []), payment]
-          };
-        }
-        return s;
-      })
-    };
-    setState(newState);
-    await syncEverythingToCloud(newState);
+    const sale = sales.find(s => s.id === saleId);
+    if (!sale) return;
+
+    const newAmountPaid = sale.amountPaid + payment.amount;
+    const newBalance = sale.balance - payment.amount;
+
+    const { error } = await supabase.from('sales').update({
+      amount_paid: newAmountPaid,
+      balance: newBalance
+    }).eq('id', saleId);
+
+    if (!error) refreshData();
   };
 
-  const addPurchase = async (p: Purchase) => {
-    const updatedProducts = state.products.map(prod => {
-      if (prod.id === p.productId) {
-        return { 
-          ...prod, 
-          stock: Number(prod.stock) + Number(p.quantity),
-          costPrice: p.unitCost,
-          sellingPrice: prod.marginPercentage > 0 ? Math.round(p.unitCost * (1 + prod.marginPercentage / 100)) : prod.sellingPrice
-        };
-      }
-      return prod;
-    });
-
-    const newState = { ...state, purchases: [...state.purchases, p], products: updatedProducts };
-    setState(newState);
-    await syncEverythingToCloud(newState);
-  };
-
-  // --- NUEVA FUNCIÓN: EDITAR COMPRA Y AJUSTAR STOCK ---
-  const updatePurchase = async (updatedPurchase: Purchase) => {
-    const oldPurchase = state.purchases.find(p => p.id === updatedPurchase.id);
-    if (!oldPurchase) return;
-
-    // Calculamos la diferencia de stock (lo nuevo menos lo viejo)
-    const stockDiff = Number(updatedPurchase.quantity) - Number(oldPurchase.quantity);
-
-    const updatedProducts = state.products.map(p => {
-      if (p.id === updatedPurchase.productId) {
-        return {
-          ...p,
-          stock: Number(p.stock) + stockDiff, // Sumamos la diferencia (puede ser negativa si se bajó la cantidad)
-          costPrice: updatedPurchase.unitCost,
-          sellingPrice: p.marginPercentage > 0 ? Math.round(updatedPurchase.unitCost * (1 + p.marginPercentage / 100)) : p.sellingPrice
-        };
-      }
-      return p;
-    });
-
-    const newState = {
-      ...state,
-      purchases: state.purchases.map(p => p.id === updatedPurchase.id ? updatedPurchase : p),
-      products: updatedProducts
-    };
-
-    setState(newState);
-    await syncEverythingToCloud(newState);
-  };
-
-  const deletePurchase = async (id: string) => {
-    const purchaseToDelete = state.purchases.find(p => p.id === id);
-    if (!purchaseToDelete) return;
-
-    const updatedProducts = state.products.map(prod => {
-      if (prod.id === purchaseToDelete.productId) {
-        return { 
-          ...prod, 
-          stock: Math.max(0, Number(prod.stock) - Number(purchaseToDelete.quantity)) 
-        };
-      }
-      return prod;
-    });
-
-    const newState = { 
-      ...state, 
-      purchases: state.purchases.filter(p => p.id !== id),
-      products: updatedProducts 
-    };
-    
-    setState(newState);
-    await syncEverythingToCloud(newState);
-  };
-
+  // 6. CONSUMOS
   const addConsumption = async (c: Consumption) => {
-    const updatedProducts = state.products.map(p => {
-      if (p.id === c.productId) {
-        return { ...p, stock: Math.max(0, p.stock - c.quantity) };
-      }
-      return p;
-    });
+    const { error } = await supabase.from('consumptions').insert([{
+        id: c.id,
+        product_id: c.productId,
+        product_name: c.productName,
+        date: c.date,
+        quantity: c.quantity,
+        reason: c.reason
+    }]);
 
-    const newState = { ...state, products: updatedProducts, consumptions: [...state.consumptions, c] };
-    setState(newState);
-    await syncEverythingToCloud(newState);
-  };
-
-  const resetData = () => {
-    if (window.confirm("¿Seguro? Se borrarán todos los datos locales.")) {
-      const emptyState = { products: [], clients: [], sales: [], purchases: [], consumptions: [] };
-      setState(emptyState);
-      localStorage.removeItem('coffeemaster_data');
+    if (!error) {
+        const product = products.find(p => p.id === c.productId);
+        if (product) {
+            await supabase.from('products').update({ stock: product.stock - c.quantity }).eq('id', product.id);
+        }
+        refreshData();
     }
   };
 
-  const exportData = () => {
-    const dataStr = JSON.stringify(state, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `backup_latostadora_${new Date().toISOString().split('T')[0]}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  };
+  // 7. COMPRAS
+  const addPurchase = async (p: Purchase) => {
+    const product = products.find(prod => prod.id === p.productId);
+    if (product) {
+        const newStock = Number(product.stock) + Number(p.quantity);
+        const newSelling = product.marginPercentage > 0 
+            ? Math.round(p.unitCost * (1 + product.marginPercentage / 100)) 
+            : product.sellingPrice;
 
-  const importData = async (jsonData: string) => {
-    try {
-      const data: AppState = JSON.parse(jsonData);
-      setState(data);
-      await syncEverythingToCloud(data);
-      alert("Importación exitosa.");
-    } catch (e) {
-      alert("Error al importar el archivo.");
+        await supabase.from('products').update({ 
+            stock: newStock, 
+            cost_price: p.unitCost,
+            selling_price: newSelling 
+        }).eq('id', product.id);
+        
+        refreshData();
     }
   };
 
-  const toggleSaveLock = () => setIsSaveLocked(!isSaveLocked);
-  
-  const dataSize = (JSON.stringify(state).length / 1024).toFixed(2) + " KB";
+  // Mantenemos estas por compatibilidad, pero ahora disparan refresh
+  const updatePurchase = async (p: Purchase) => { refreshData(); };
+  const deletePurchase = async (id: string) => { refreshData(); };
 
   return (
     <StoreContext.Provider value={{ 
-        ...state, 
+        products, clients, sales, purchases, consumptions,
         addProduct, updateProduct, deleteProduct, 
         addClient, updateClient, deleteClient, 
         addSale, deleteSale, addPaymentToSale,
         addPurchase, updatePurchase, deletePurchase, addConsumption,
-        resetData, exportData, importData,
-        isSaveLocked, toggleSaveLock, 
-        dataSize, isLoading, syncStatus,
-        pushToCloud: async () => await syncEverythingToCloud(state),
-        pullFromCloud,
-        setSyncId: async (id) => { setState(p => ({...p, syncId: id})); return true; },
-        createSyncSession: async () => { 
-          const id = Math.random().toString(36).substring(7); 
-          setState(p => ({...p, syncId: id})); 
-          return id; 
-        },
-        isSyncing: syncStatus === 'syncing'
+        monthlyGoal, stockThreshold, updateGlobalSettings,
+        isLoading, refreshData
     }}>
       {children}
     </StoreContext.Provider>
