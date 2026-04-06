@@ -11,6 +11,8 @@ interface StoreContextType extends AppState {
   deleteClient: (id: string) => Promise<void>;
   addSale: (s: Sale) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
+  addPurchase: (p: Purchase) => Promise<void>;
+  addConsumption: (c: Consumption) => Promise<void>;
   importData: (jsonData: string) => Promise<void>;
   monthlyGoal: number;
   stockThreshold: number;
@@ -33,22 +35,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const refreshData = async () => {
     try {
-      const [p, c, s, sett] = await Promise.all([
+      const [p, c, s, pur, cons, sett] = await Promise.all([
         supabase.from('products').select('*').order('name'),
         supabase.from('clients').select('*').order('name'),
         supabase.from('sales').select('*, items:sale_items(*)').order('date', { ascending: false }),
+        supabase.from('purchases').select('*').order('date', { ascending: false }),
+        supabase.from('consumptions').select('*').order('date', { ascending: false }),
         supabase.from('settings').select('*').eq('id', 'global_config').maybeSingle()
       ]);
+
       if (p.data) setProducts(p.data.map((x: any) => ({ ...x, costPrice: x.cost_price, marginPercentage: x.margin_percentage, sellingPrice: x.selling_price, imageUrl: x.image_url })));
       if (c.data) setClients(c.data.map((x: any) => ({ ...x, totalSpent: x.total_spent })));
-      if (s.data) setSales(s.data.map((x: any) => ({ ...x, clientId: x.client_id, clientName: x.client_name, amountPaid: x.amount_paid, items: x.items.map((i: any) => ({ ...i, appliedPrice: i.applied_price })) })));
+      if (s.data) setSales(s.data.map((x: any) => ({ 
+        ...x, 
+        clientId: x.client_id, 
+        clientName: x.client_name, 
+        paymentMethod: x.payment_method,
+        amountPaid: x.amount_paid, 
+        items: x.items.map((i: any) => ({ ...i, appliedPrice: i.applied_price })) 
+      })));
+      if (pur.data) setPurchases(pur.data.map((x: any) => ({ ...x, productName: x.product_name, unitCost: x.unit_cost, totalCost: x.total_cost })));
+      if (cons.data) setConsumptions(cons.data.map((x: any) => ({ ...x, productName: x.product_name })));
       if (sett.data) { setMonthlyGoal(sett.data.monthly_goal); setStockThreshold(sett.data.stock_threshold); }
-    } finally { setIsLoading(false); }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     refreshData();
-    const sub = supabase.channel('realtime').on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData()).subscribe();
+    const sub = supabase.channel('sync_tostadora').on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData()).subscribe();
     return () => { supabase.removeChannel(sub); };
   }, []);
 
@@ -57,7 +73,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const data = JSON.parse(jsonData);
       
-      // 1. IMPORTAR PRODUCTOS (De a uno por las imágenes pesadas)
+      // Importación secuencial por lotes para no saturar la conexión
       if (data.products) {
         for (const p of data.products) {
           await supabase.from('products').upsert({
@@ -68,7 +84,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // 2. IMPORTAR CLIENTES
       if (data.clients) {
         for (const c of data.clients) {
           await supabase.from('clients').upsert({
@@ -77,15 +92,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // 3. IMPORTAR VENTAS (Especial atención a marzo y abril)
       if (data.sales) {
         for (const s of data.sales) {
-          const { error: saleError } = await supabase.from('sales').upsert({
+          await supabase.from('sales').upsert({
             id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date,
             total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod
           });
-          
-          if (!saleError && s.items) {
+          if (s.items) {
             await supabase.from('sale_items').upsert(s.items.map((i: any) => ({
               sale_id: s.id, product_id: i.id, name: i.name, quantity: i.quantity, applied_price: i.appliedPrice
             })));
@@ -93,7 +106,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // 4. IMPORTAR CONSUMOS Y COMPRAS
+      if (data.purchases) {
+        for (const pur of data.purchases) {
+          await supabase.from('purchases').upsert({
+            id: pur.id, date: pur.date, product_id: pur.productId, product_name: pur.productName,
+            quantity: pur.quantity, unit_cost: pur.unitCost, total_cost: pur.totalCost
+          });
+        }
+      }
+
       if (data.consumptions) {
         for (const cons of data.consumptions) {
           await supabase.from('consumptions').upsert({
@@ -104,9 +125,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       await refreshData();
-      alert("¡RECUPERACIÓN COMPLETA! Se han procesado todos los registros hasta el día de hoy.");
+      alert("¡Restauración Completa! Todos los módulos están sincronizados.");
     } catch (e) {
-      alert("Error en la importación. Es posible que el archivo sea demasiado grande para la conexión actual.");
+      alert("Error al importar. Revisa el archivo.");
     } finally {
       setIsLoading(false);
     }
@@ -114,7 +135,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <StoreContext.Provider value={{ 
-      products, clients, sales, purchases: [], consumptions: [], isLoading, monthlyGoal, stockThreshold,
+      products, clients, sales, purchases, consumptions, isLoading, monthlyGoal, stockThreshold,
       addProduct: async (p) => { await supabase.from('products').insert([{ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }]); },
       updateProduct: async (p) => { await supabase.from('products').update({ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }).eq('id', p.id); },
       deleteProduct: async (id) => { await supabase.from('products').delete().eq('id', id); },
@@ -124,9 +145,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addSale: async (s) => {
         await supabase.from('sales').insert([{ id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date, total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod }]);
         await supabase.from('sale_items').insert(s.items.map(i => ({ sale_id: s.id, product_id: i.id, name: i.name, quantity: i.quantity, applied_price: i.appliedPrice })));
+        for (const item of s.items) {
+          const p = products.find(x => x.id === item.id);
+          if (p) await supabase.from('products').update({ stock: p.stock - item.quantity }).eq('id', p.id);
+        }
       },
       deleteSale: async (id) => { await supabase.from('sales').delete().eq('id', id); },
-      importData, refreshData, updateGlobalSettings: async (g, t) => { await supabase.from('settings').upsert({ id: 'global_config', monthly_goal: g, stock_threshold: t }); }
+      addPurchase: async (p) => { await supabase.from('purchases').insert([{ ...p, product_name: p.productName, unit_cost: p.unitCost, total_cost: p.totalCost }]); },
+      addConsumption: async (c) => { await supabase.from('consumptions').insert([{ ...c, product_name: c.productName }]); },
+      updateGlobalSettings: async (g, t) => { await supabase.from('settings').upsert({ id: 'global_config', monthly_goal: g, stock_threshold: t }); },
+      importData, refreshData
     }}>
       {children}
     </StoreContext.Provider>
