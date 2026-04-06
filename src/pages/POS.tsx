@@ -1,8 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Product, CartItem, Client, Sale } from '../types';
-import { Search, Plus, Minus, Trash, User, ShoppingCart, CheckCircle, ArrowLeft, X, ShoppingBag as ShoppingBagIcon, Wallet, CreditCard, AlertCircle, ChevronRight } from 'lucide-react';
+import { Product, CartItem, Client } from '../types';
+import { 
+  Search, Plus, Minus, Trash, User, ShoppingCart, 
+  CheckCircle, ArrowLeft, X, ShoppingBag as ShoppingBagIcon, 
+  Wallet, CreditCard, AlertCircle, ChevronRight 
+} from 'lucide-react';
 
+// --- SUB-COMPONENTE: CONTENIDO DEL CARRITO ---
 interface CartContentProps {
   cart: CartItem[];
   selectedClient: Client | null;
@@ -104,20 +109,20 @@ const CartContent: React.FC<CartContentProps> = ({
       {/* RESUMEN Y PAGO */}
       <div className="p-6 bg-gray-50 border-t-2 border-gray-100 space-y-6 flex-shrink-0">
         <div className="grid grid-cols-2 gap-3">
-           <button 
-             onClick={() => onSetPaymentMethod('Efectivo')}
-             className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${paymentMethod === 'Efectivo' ? 'border-[#6B7A3A] bg-white shadow-md text-[#6B7A3A]' : 'border-gray-200 text-gray-400 opacity-50'}`}
-           >
-             <Wallet size={20} />
-             <span className="text-[10px] font-black uppercase tracking-widest">Efectivo</span>
-           </button>
-           <button 
-             onClick={() => onSetPaymentMethod('Transferencia')}
-             className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${paymentMethod === 'Transferencia' ? 'border-[#1C1C1C] bg-white shadow-md text-[#1C1C1C]' : 'border-gray-200 text-gray-400 opacity-50'}`}
-           >
-             <CreditCard size={20} />
-             <span className="text-[10px] font-black uppercase tracking-widest">Transfer</span>
-           </button>
+            <button 
+              onClick={() => onSetPaymentMethod('Efectivo')}
+              className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${paymentMethod === 'Efectivo' ? 'border-[#6B7A3A] bg-white shadow-md text-[#6B7A3A]' : 'border-gray-200 text-gray-400 opacity-50'}`}
+            >
+              <Wallet size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Efectivo</span>
+            </button>
+            <button 
+              onClick={() => onSetPaymentMethod('Transferencia')}
+              className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${paymentMethod === 'Transferencia' ? 'border-[#1C1C1C] bg-white shadow-md text-[#1C1C1C]' : 'border-gray-200 text-gray-400 opacity-50'}`}
+            >
+              <CreditCard size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Transfer</span>
+            </button>
         </div>
 
         <div className="bg-white p-4 rounded-[2rem] border-2 border-gray-100 space-y-4 shadow-sm">
@@ -178,6 +183,7 @@ const CartContent: React.FC<CartContentProps> = ({
   );
 };
 
+// --- COMPONENTE PRINCIPAL: PUNTO DE VENTA ---
 const POS = () => {
   const { products, clients, addSale } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
@@ -197,6 +203,7 @@ const POS = () => {
   const total = subtotal - discount;
   const totalItems = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
 
+  // Actualiza el monto recibido automáticamente al cambiar el total
   useEffect(() => {
     setAmountPaid(total);
   }, [total]);
@@ -205,6 +212,11 @@ const POS = () => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
+        // Validamos stock antes de sumar
+        if (product.stock <= existing.quantity) {
+            alert('Sin stock disponible');
+            return prev;
+        }
         return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { ...product, quantity: 1, appliedPrice: product.sellingPrice }];
@@ -215,7 +227,8 @@ const POS = () => {
     setCart(prev => prev.map(item => {
       if (item.id === id) {
         const newQty = Math.max(1, item.quantity + delta);
-        if (item.stock < newQty) {
+        const product = products.find(p => p.id === id);
+        if (product && product.stock < newQty) {
           alert('Stock insuficiente');
           return item;
         }
@@ -230,9 +243,11 @@ const POS = () => {
     if (cart.length <= 1) setIsMobileCartOpen(false);
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
     const balance = total - amountPaid;
+    
+    // Seguridad: no permitir deuda sin cliente
     if (balance > 0 && !selectedClient) {
         alert("Debe seleccionar un cliente para registrar una deuda.");
         return;
@@ -242,35 +257,39 @@ const POS = () => {
     const now = new Date();
     checkoutDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
-    addSale({
-      id: crypto.randomUUID(),
-      clientId: selectedClient ? selectedClient.id : null,
-      clientName: selectedClient ? selectedClient.name : 'Consumidor Final',
-      date: checkoutDate.toISOString(),
-      items: cart,
-      subtotal,
-      discountAmount: discount,
-      total,
-      paymentMethod,
-      amountPaid: amountPaid,
-      balance: balance,
-      payments: amountPaid > 0 ? [{
-        id: crypto.randomUUID(),
-        date: checkoutDate.toISOString(),
-        amount: amountPaid,
-        method: paymentMethod
-      }] : []
-    });
-
-    setSuccessMsg('¡VENTA EXITOSA! ☕');
-    setCart([]);
-    setSelectedClient(null);
-    setDiscount(0);
-    setAmountPaid(0);
-    setTimeout(() => {
-        setSuccessMsg('');
-        setIsMobileCartOpen(false);
-    }, 2000);
+    try {
+        await addSale({
+            id: crypto.randomUUID(),
+            clientId: selectedClient ? selectedClient.id : null,
+            clientName: selectedClient ? selectedClient.name : 'Consumidor Final',
+            date: checkoutDate.toISOString(),
+            items: cart,
+            subtotal,
+            discountAmount: discount,
+            total,
+            paymentMethod,
+            amountPaid: amountPaid,
+            balance: balance,
+            payments: amountPaid > 0 ? [{
+              id: crypto.randomUUID(),
+              date: checkoutDate.toISOString(),
+              amount: amountPaid,
+              method: paymentMethod
+            }] : []
+          });
+      
+          setSuccessMsg('¡VENTA EXITOSA! ☕');
+          setCart([]);
+          setSelectedClient(null);
+          setDiscount(0);
+          setAmountPaid(0);
+          setTimeout(() => {
+              setSuccessMsg('');
+              setIsMobileCartOpen(false);
+          }, 2000);
+    } catch (error) {
+        alert("Error al procesar la venta. Intente de nuevo.");
+    }
   };
 
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -346,9 +365,9 @@ const POS = () => {
          />
       </div>
 
-      {/* BOTÓN FLOTANTE MÓVIL (TIPO APP) */}
+      {/* BOTÓN FLOTANTE MÓVIL */}
       {cart.length > 0 && !isMobileCartOpen && (
-         <div className="md:hidden fixed bottom-24 right-6 left-6 z-[100] animate-bounce-in">
+          <div className="md:hidden fixed bottom-24 right-6 left-6 z-[100] animate-bounce-in">
             <button 
               onClick={() => setIsMobileCartOpen(true)}
               className="w-full bg-[#1C1C1C] text-white rounded-[2rem] py-5 px-8 shadow-2xl flex justify-between items-center border-b-8 border-[#6B7A3A] active:scale-95 transition-all"
@@ -361,7 +380,7 @@ const POS = () => {
                </div>
                <span className="font-black text-2xl tracking-tighter">${total.toLocaleString()}</span>
             </button>
-         </div>
+          </div>
       )}
 
       {/* CARRITO MÓVIL (OVERLAY FULLSCREEN) */}
@@ -392,7 +411,7 @@ const POS = () => {
         </div>
       )}
 
-      {/* MODAL SELECCIONAR CLIENTE - ESTILO PREMIUM */}
+      {/* MODAL SELECCIONAR CLIENTE */}
       {showClientModal && (
         <div className="fixed inset-0 bg-[#1C1C1C]/90 flex items-end sm:items-center justify-center z-[150] p-0 sm:p-4 backdrop-blur-md">
           <div className="bg-white rounded-t-[3rem] sm:rounded-[3rem] w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl animate-slide-up border-t-8 border-[#6B7A3A]">
