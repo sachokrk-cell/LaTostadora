@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Client, Sale, PaymentRecord } from '../types';
-import { User, Phone, Mail, Search, Plus, Calendar, ArrowLeft, Edit2, Trash2, X, AlertTriangle, Wallet, CheckCircle, CreditCard } from 'lucide-react';
+import { User, Phone, Mail, Search, Plus, Calendar, ArrowLeft, Edit2, Trash2, X, AlertTriangle, Wallet, CheckCircle, CreditCard, ChevronRight, MessageSquare } from 'lucide-react';
 
 const Clients = () => {
   const { clients, sales, addClient, updateClient, deleteClient, addPaymentToSale } = useStore();
@@ -21,12 +20,10 @@ const Clients = () => {
   const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
 
   const [clientForm, setClientForm] = useState<Partial<Client>>({
-    name: '',
-    email: '',
-    phone: '',
-    notes: ''
+    name: '', email: '', phone: '', notes: ''
   });
 
+  // Lógica de datos (Sin cambios en funcionalidad)
   const clientHistory = useMemo(() => {
     if (!selectedClient) return [];
     return sales
@@ -38,101 +35,6 @@ const Clients = () => {
     return clientHistory.reduce((acc, s) => acc + (Number(s.balance) || 0), 0);
   }, [clientHistory]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!clientForm.name) return;
-    
-    if (isEditing && editingId) {
-        const original = clients.find(c => c.id === editingId);
-        if (original) {
-            updateClient({
-                ...original,
-                name: clientForm.name,
-                email: clientForm.email,
-                phone: clientForm.phone,
-                notes: clientForm.notes || '',
-            });
-            if(selectedClient?.id === editingId) {
-                setSelectedClient({
-                    ...original,
-                    name: clientForm.name,
-                    email: clientForm.email,
-                    phone: clientForm.phone,
-                    notes: clientForm.notes || '',
-                    totalSpent: original.totalSpent,
-                    createdAt: original.createdAt
-                });
-            }
-        }
-    } else {
-        addClient({
-            id: crypto.randomUUID(),
-            name: clientForm.name!,
-            email: clientForm.email,
-            phone: clientForm.phone,
-            notes: clientForm.notes || '',
-            totalSpent: 0,
-            createdAt: new Date().toISOString()
-        });
-    }
-    closeModal();
-  };
-
-  const handleRegisterPayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!saleToPay || paymentAmount <= 0) return;
-    
-    const payment: PaymentRecord = {
-        id: crypto.randomUUID(),
-        date: new Date().toISOString(),
-        amount: Math.min(paymentAmount, saleToPay.balance),
-        method: paymentMethod
-    };
-    
-    addPaymentToSale(saleToPay.id, payment);
-    setIsPaymentModalOpen(false);
-    setSaleToPay(null);
-  };
-
-  const openNewClientModal = () => {
-      setClientForm({ name: '', email: '', phone: '', notes: '' });
-      setIsEditing(false);
-      setEditingId(null);
-      setIsModalOpen(true);
-  };
-
-  const handleEdit = (client: Client) => {
-      setClientForm({
-          name: client.name,
-          email: client.email,
-          phone: client.phone,
-          notes: client.notes
-      });
-      setEditingId(client.id);
-      setIsEditing(true);
-      setIsModalOpen(true);
-  };
-
-  const openPaymentModal = (sale: Sale) => {
-    setSaleToPay(sale);
-    setPaymentAmount(sale.balance);
-    setIsPaymentModalOpen(true);
-  };
-
-  const confirmDelete = () => {
-      if (selectedClient) {
-          deleteClient(selectedClient.id);
-          setSelectedClient(null);
-          setIsDeleteModalOpen(false);
-      }
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setIsEditing(false);
-    setEditingId(null);
-  };
-
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).map(c => {
@@ -140,291 +42,243 @@ const Clients = () => {
     return { ...c, debt };
   });
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientForm.name) return;
+    if (isEditing && editingId) {
+        const original = clients.find(c => c.id === editingId);
+        if (original) updateClient({ ...original, name: clientForm.name, email: clientForm.email, phone: clientForm.phone, notes: clientForm.notes || '' });
+    } else {
+        addClient({ id: crypto.randomUUID(), name: clientForm.name!, email: clientForm.email, phone: clientForm.phone, notes: clientForm.notes || '', totalSpent: 0, createdAt: new Date().toISOString() });
+    }
+    setIsModalOpen(false);
+  };
+
   return (
-    <div className="p-4 md:p-8 h-full flex flex-col relative">
-      <div className={`flex justify-between items-center mb-6 ${selectedClient ? 'hidden md:flex' : ''}`}>
-        <h2 className="text-2xl md:text-3xl font-bold text-coffee-900">Clientes</h2>
+    <div className="space-y-6 text-[#1C1C1C] animate-fade-in pb-20 md:pb-8">
+      
+      {/* HEADER - BOTÓN CORREGIDO */}
+      <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${selectedClient ? 'hidden md:flex' : 'flex'}`}>
+        <div>
+          <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">Clientes</h2>
+          <p className="text-[#6B7A3A] font-bold text-xs uppercase tracking-[0.2em] mt-2">La Tostadora - Base de Datos</p>
+        </div>
         <button 
-          onClick={openNewClientModal} 
-          className="bg-coffee-600 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-coffee-700 transition-all shadow-md active:scale-95 font-bold"
+          onClick={() => { setClientForm({ name: '', email: '', phone: '', notes: '' }); setIsEditing(false); setIsModalOpen(true); }}
+          className="w-full md:w-auto bg-[#1C1C1C] text-[#E8DFC8] px-8 py-4 rounded-[1.5rem] flex items-center justify-center gap-3 shadow-xl hover:bg-[#6B7A3A] transition-all active:scale-95 font-black uppercase italic tracking-tighter border-b-4 border-[#000]"
         >
-          <Plus size={20} /> <span className="hidden sm:inline">Nuevo Cliente</span>
+          <Plus size={20} className="text-[#6B7A3A]" /> Nuevo Cliente
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
-        {/* Client List */}
-        <div className={`bg-white rounded-2xl shadow-md flex flex-col overflow-hidden border border-gray-100 ${selectedClient ? 'hidden lg:flex' : 'flex'}`}>
-          <div className="p-4 border-b">
-            <div className="relative">
-               <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-               <input 
-                 type="text" 
-                 placeholder="Buscar cliente..." 
-                 className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-coffee-500 transition-all text-gray-900 font-bold"
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-               />
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* LISTADO DE CLIENTES */}
+        <div className={`space-y-4 ${selectedClient ? 'hidden lg:block' : 'block'}`}>
+          <div className="relative group">
+             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#6B7A3A] transition-colors" size={20} />
+             <input 
+              type="text" 
+              placeholder="Buscar cliente..." 
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-[1.5rem] outline-none font-bold focus:border-[#6B7A3A] focus:bg-white transition-all shadow-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-          <div className="overflow-y-auto flex-1 p-2 space-y-2">
+
+          <div className="space-y-3 overflow-y-auto max-h-[70vh] pr-2 custom-scrollbar">
             {filteredClients.map(client => (
               <div 
                 key={client.id}
                 onClick={() => setSelectedClient(client)}
-                className={`p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between group border-2 ${selectedClient?.id === client.id ? 'bg-coffee-50 border-coffee-400 shadow-sm' : 'bg-white border-transparent hover:border-gray-100 hover:bg-gray-50'}`}
+                className={`p-5 rounded-[2rem] cursor-pointer transition-all flex items-center justify-between border-2 ${selectedClient?.id === client.id ? 'bg-[#1C1C1C] border-[#1C1C1C] text-white shadow-xl scale-[1.02]' : 'bg-white border-gray-50 hover:border-gray-200'}`}
               >
                 <div className="min-w-0">
-                   <h3 className="font-bold text-gray-800 group-hover:text-coffee-700 transition-colors truncate">{client.name}</h3>
-                   <div className="flex gap-2">
-                     <span className="text-[10px] text-gray-400 font-bold uppercase">{client.email || client.phone || 'Sin contacto'}</span>
-                     {client.debt > 0 && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 rounded font-black">DEBE</span>}
-                   </div>
+                   <h3 className={`font-black text-lg truncate uppercase italic ${selectedClient?.id === client.id ? 'text-[#E8DFC8]' : 'text-[#1C1C1C]'}`}>{client.name}</h3>
+                   <p className={`text-[10px] font-bold uppercase tracking-widest ${selectedClient?.id === client.id ? 'text-gray-400' : 'text-gray-400'}`}>{client.phone || 'Sin contacto'}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
-                   <span className={`block font-black text-sm ${client.debt > 0 ? 'text-red-600' : 'text-coffee-700'}`}>${(client.debt > 0 ? client.debt : client.totalSpent).toLocaleString()}</span>
-                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">{client.debt > 0 ? 'Deuda' : 'Gastado'}</span>
+                <div className="text-right">
+                   <p className={`text-xl font-black ${client.debt > 0 ? 'text-red-500' : (selectedClient?.id === client.id ? 'text-[#6B7A3A]' : 'text-[#6B7A3A]')}`}>
+                     ${(client.debt > 0 ? client.debt : client.totalSpent).toLocaleString()}
+                   </p>
+                   <span className="text-[8px] font-black uppercase tracking-tighter opacity-60">{client.debt > 0 ? 'Deuda' : 'Consumo'}</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Client Detail */}
-        <div className={`lg:col-span-2 bg-white rounded-2xl shadow-md flex flex-col overflow-hidden border border-gray-100 ${selectedClient ? 'fixed inset-0 z-[60] md:z-0 m-0 rounded-none lg:static lg:rounded-2xl flex' : 'hidden lg:flex'}`}>
+        {/* FICHA DETALLE (MOBILE-FIRST FULLSCREEN) */}
+        <div className={`lg:col-span-2 ${selectedClient ? 'fixed inset-0 z-[100] bg-white flex flex-col lg:static lg:bg-transparent lg:z-0' : 'hidden lg:flex flex-col items-center justify-center bg-gray-50 rounded-[3rem] border-4 border-dashed border-gray-100 h-[600px]'}`}>
            {selectedClient ? (
-             <div className="flex flex-col h-full bg-white animate-fade-in relative">
-               <div className="p-4 md:p-6 border-b bg-gray-50 flex-shrink-0">
-                 <button 
-                    onClick={() => setSelectedClient(null)} 
-                    className="mb-4 flex items-center gap-2 text-coffee-600 font-black hover:text-coffee-800 transition-all w-fit text-sm uppercase tracking-widest cursor-pointer p-2 -ml-2 hover:bg-coffee-50 rounded-lg"
-                 >
-                    <ArrowLeft size={20} /> Volver a la lista
+             <div className="flex flex-col h-full lg:bg-white lg:rounded-[3rem] lg:border-2 lg:border-gray-50 lg:shadow-sm overflow-hidden">
+               
+               {/* HEADER FICHA */}
+               <div className="p-6 bg-[#1C1C1C] text-white lg:rounded-t-[2.8rem] border-b-8 border-[#6B7A3A]">
+                 <button onClick={() => setSelectedClient(null)} className="flex items-center gap-2 text-[#6B7A3A] font-black text-[10px] uppercase tracking-[0.2em] mb-4 hover:translate-x-[-4px] transition-transform">
+                   <ArrowLeft size={16} /> Volver al listado
                  </button>
-
-                 <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-gradient-to-br from-coffee-600 to-coffee-800 rounded-full flex items-center justify-center text-white text-3xl font-black shadow-lg">
-                        {selectedClient.name.charAt(0).toUpperCase()}
+                 
+                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                    <div className="flex items-center gap-5">
+                      <div className="w-20 h-20 bg-[#6B7A3A] rounded-[2rem] flex items-center justify-center text-[#1C1C1C] text-4xl font-black shadow-lg">
+                        {selectedClient.name.charAt(0)}
                       </div>
                       <div>
-                        <h2 className="text-2xl font-black text-gray-900 leading-tight">{selectedClient.name}</h2>
-                        <div className="flex flex-col md:flex-row gap-1 md:gap-4 mt-1 text-xs text-gray-500 font-bold">
-                          {selectedClient.phone && <span className="flex items-center gap-1"><Phone size={12}/> {selectedClient.phone}</span>}
-                          {selectedClient.email && <span className="flex items-center gap-1"><Mail size={12}/> {selectedClient.email}</span>}
+                        <h2 className="text-3xl font-black uppercase italic tracking-tighter text-[#E8DFC8]">{selectedClient.name}</h2>
+                        <div className="flex flex-wrap gap-4 mt-2">
+                           <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase"><Phone size={12}/> {selectedClient.phone || 'N/A'}</span>
+                           <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase"><Mail size={12}/> {selectedClient.email || 'N/A'}</span>
                         </div>
                       </div>
                     </div>
-                    
                     <div className="flex gap-2 w-full md:w-auto">
-                        <div className={`px-4 py-2 rounded-2xl border flex flex-col items-center flex-1 md:min-w-[120px] ${clientDebt > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                           <span className="text-[10px] font-black uppercase text-gray-400">Saldo Pendiente</span>
-                           <span className={`text-lg font-black ${clientDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>${clientDebt.toLocaleString()}</span>
+                        <div className={`flex-1 md:min-w-[150px] p-4 rounded-2xl border-2 flex flex-col items-center justify-center ${clientDebt > 0 ? 'bg-red-600 border-red-600 text-white' : 'bg-[#E8DFC8] border-[#E8DFC8] text-[#1C1C1C]'}`}>
+                          <span className="text-[8px] font-black uppercase tracking-[0.2em] mb-1 opacity-70">Saldo Cuenta</span>
+                          <span className="text-2xl font-black tracking-tighter">${clientDebt.toLocaleString()}</span>
                         </div>
                         <div className="flex flex-col gap-2">
-                           <button onClick={() => handleEdit(selectedClient)} className="p-2 bg-white text-gray-600 rounded-xl hover:bg-gray-100 border border-gray-200 shadow-sm"><Edit2 size={16} /></button>
-                           <button onClick={() => setIsDeleteModalOpen(true)} className="p-2 bg-white text-red-600 rounded-xl hover:bg-red-50 border border-red-100 shadow-sm"><Trash2 size={16} /></button>
+                          <button onClick={() => { setClientForm(selectedClient); setEditingId(selectedClient.id); setIsEditing(true); setIsModalOpen(true); }} className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10"><Edit2 size={18} /></button>
+                          <button onClick={() => setIsDeleteModalOpen(true)} className="p-3 bg-red-500/20 hover:bg-red-500/40 rounded-xl transition-all border border-red-500/20 text-red-500"><Trash2 size={18} /></button>
                         </div>
                     </div>
                  </div>
                </div>
 
-               {/* Tabs */}
-               <div className="flex bg-white px-4 pt-4 border-b flex-shrink-0">
-                  <button 
-                    onClick={() => setActiveTab('history')}
-                    className={`px-4 py-2 font-black text-sm transition-all border-b-4 ${activeTab === 'history' ? 'border-coffee-600 text-coffee-800' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                  >
-                    Historial de Compras
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('account')}
-                    className={`px-4 py-2 font-black text-sm transition-all border-b-4 ${activeTab === 'account' ? 'border-red-500 text-red-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                  >
-                    Cuenta Corriente (Deudas)
-                  </button>
+               {/* TABS */}
+               <div className="flex bg-gray-50 px-6 border-b">
+                  <button onClick={() => setActiveTab('history')} className={`px-6 py-4 font-black text-[10px] uppercase tracking-widest transition-all border-b-4 ${activeTab === 'history' ? 'border-[#6B7A3A] text-[#1C1C1C]' : 'border-transparent text-gray-400'}`}>Compras</button>
+                  <button onClick={() => setActiveTab('account')} className={`px-6 py-4 font-black text-[10px] uppercase tracking-widest transition-all border-b-4 ${activeTab === 'account' ? 'border-red-500 text-[#1C1C1C]' : 'border-transparent text-gray-400'}`}>Cuenta Corriente</button>
                </div>
-               
-               <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/30">
-                 {activeTab === 'history' ? (
-                    <div className="space-y-4 pb-10">
-                        {clientHistory.map(sale => (
-                        <div key={sale.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-bold text-gray-500 text-xs flex items-center gap-1">
-                                    <Calendar size={14} /> {new Date(sale.date).toLocaleDateString()}
-                                </span>
-                                <span className="font-black text-coffee-600">${(Number(sale.total) || 0).toLocaleString()}</span>
-                            </div>
-                            <div className="text-[11px] text-gray-600 space-y-1">
-                                {(sale.items || []).map((item, idx) => (
-                                    <div key={idx} className="flex justify-between">
-                                        <span>{item.quantity}x {item.name}</span>
-                                        <span className="font-bold">${((Number(item.appliedPrice) || 0) * (Number(item.quantity) || 0)).toLocaleString()}</span>
-                                    </div>
-                                ))}
-                            </div>
+
+               {/* CONTENIDO FICHA */}
+               <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar">
+                  {activeTab === 'history' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
+                      {clientHistory.map(sale => (
+                        <div key={sale.id} className="bg-gray-50 p-5 rounded-[2rem] border-2 border-transparent hover:border-[#6B7A3A]/20 transition-all">
+                           <div className="flex justify-between items-start mb-4">
+                              <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-2"><Calendar size={12}/> {new Date(sale.date).toLocaleDateString()}</span>
+                              <span className="text-xl font-black text-[#1C1C1C]">${sale.total.toLocaleString()}</span>
+                           </div>
+                           <div className="space-y-1">
+                              {sale.items.map((i, idx) => (
+                                <p key={idx} className="text-[11px] font-bold text-gray-600 flex justify-between"><span>{i.quantity}x {i.name}</span> <span className="text-[#6B7A3A]">${(i.appliedPrice * i.quantity).toLocaleString()}</span></p>
+                              ))}
+                           </div>
                         </div>
-                        ))}
+                      ))}
                     </div>
-                 ) : (
-                    <div className="space-y-4 pb-10">
-                        {clientHistory.filter(s => (Number(s.balance) || 0) > 0).map(sale => (
-                            <div key={sale.id} className="bg-white border-2 border-red-100 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
-                                <div className="space-y-1 w-full md:w-auto">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-black text-red-600 bg-red-50 px-2 py-1 rounded-lg uppercase tracking-tighter">Venta Pendiente</span>
-                                        <span className="text-xs text-gray-400 font-bold">{new Date(sale.date).toLocaleDateString()}</span>
-                                    </div>
-                                    <h4 className="font-bold text-gray-800">{(sale.items || []).map(i => i.name).join(', ')}</h4>
-                                    <div className="flex gap-4 text-xs font-bold">
-                                        <span className="text-gray-400">Total: ${ (Number(sale.total) || 0).toLocaleString()}</span>
-                                        <span className="text-green-600">Pagado: ${ (Number(sale.amountPaid) || 0).toLocaleString()}</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-6 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0">
-                                    <div className="text-center">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase">A Cobrar</p>
-                                        <p className="text-2xl font-black text-red-600">${(Number(sale.balance) || 0).toLocaleString()}</p>
-                                    </div>
-                                    <button 
-                                        onClick={() => openPaymentModal(sale)}
-                                        className="bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 transition-all shadow-md font-black flex items-center gap-2 active:scale-95"
-                                    >
-                                        <Wallet size={18} /> COBRAR
-                                    </button>
-                                </div>
+                  ) : (
+                    <div className="space-y-4 pb-20">
+                       {clientHistory.filter(s => s.balance > 0).map(sale => (
+                         <div key={sale.id} className="bg-white border-2 border-red-50 p-6 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm border-l-8 border-l-red-500">
+                            <div className="w-full md:w-auto">
+                               <span className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 block">Ticket Pendiente</span>
+                               <h4 className="font-black text-[#1C1C1C] text-lg uppercase leading-none mb-1">{new Date(sale.date).toLocaleDateString()}</h4>
+                               <p className="text-[10px] font-bold text-gray-400 uppercase">{sale.items.length} productos registrados</p>
                             </div>
-                        ))}
-                        {clientHistory.filter(s => (Number(s.balance) || 0) > 0).length === 0 && (
-                            <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-100">
-                                <CheckCircle size={48} className="mx-auto text-green-200 mb-4" />
-                                <h4 className="text-lg font-bold text-gray-400">Sin deudas pendientes</h4>
-                                <p className="text-xs text-gray-400">Este cliente está al día con sus cuentas.</p>
+                            <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
+                               <div className="text-right">
+                                  <p className="text-[10px] font-black text-gray-400 uppercase">Saldo a Pagar</p>
+                                  <p className="text-3xl font-black text-red-600 tracking-tighter">${sale.balance.toLocaleString()}</p>
+                               </div>
+                               <button onClick={() => { setSaleToPay(sale); setPaymentAmount(sale.balance); setIsPaymentModalOpen(true); }} className="bg-[#1C1C1C] text-[#E8DFC8] px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#6B7A3A] transition-all shadow-lg">
+                                 <Wallet size={16} /> Cobrar
+                               </button>
                             </div>
-                        )}
+                         </div>
+                       ))}
+                       {clientHistory.filter(s => s.balance > 0).length === 0 && (
+                         <div className="py-20 text-center bg-gray-50 rounded-[3rem] border-4 border-dashed border-gray-100">
+                            <CheckCircle size={48} className="mx-auto text-[#6B7A3A] mb-4 opacity-20" />
+                            <p className="text-gray-400 font-black uppercase text-xs tracking-widest">El cliente no tiene deudas</p>
+                         </div>
+                       )}
                     </div>
-                 )}
+                  )}
                </div>
              </div>
            ) : (
-             <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center bg-gray-50/50">
-               <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <User size={48} className="opacity-20 text-gray-500" />
-               </div>
-               <h3 className="text-lg font-bold text-gray-600">Ficha de Cliente</h3>
-               <p className="max-w-xs mx-auto mt-2 text-xs font-bold leading-relaxed uppercase tracking-widest opacity-60">Selecciona un cliente de la lista para gestionar sus compras y deudas.</p>
+             <div className="flex flex-col items-center">
+                <User size={64} className="text-gray-200 mb-4" />
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-gray-400">Selecciona un cliente</h3>
+                <p className="text-gray-300 font-bold text-xs uppercase tracking-widest mt-2">Para ver su ficha técnica y deuda</p>
              </div>
            )}
         </div>
       </div>
 
-      {/* REGISTRAR PAGO MODAL */}
+      {/* MODAL COBRAR DEUDA (SOLUCIÓN RESPONSIVA) */}
       {isPaymentModalOpen && saleToPay && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-gray-100">
-                <div className="p-8 pb-4 flex justify-between items-center">
-                    <h3 className="font-black text-2xl text-coffee-900">Cobrar Deuda</h3>
-                    <button onClick={() => setIsPaymentModalOpen(false)} className="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
-                </div>
-                <form onSubmit={handleRegisterPayment} className="p-8 pt-4 space-y-6">
-                    <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
-                        <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Saldo Pendiente en esta Venta</span>
-                        <p className="text-4xl font-black text-red-600">${(Number(saleToPay.balance) || 0).toLocaleString()}</p>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wider">Monto a Abonar</label>
-                            <input 
-                                required autoFocus type="number" step="0.01" max={saleToPay.balance}
-                                className="w-full text-3xl font-black text-center p-4 border-2 border-gray-200 rounded-2xl focus:border-coffee-500 outline-none transition-all bg-gray-50 text-coffee-900" 
-                                value={paymentAmount === 0 ? '' : paymentAmount} 
-                                onChange={e => setPaymentAmount(Number(e.target.value))} 
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wider">Método de Cobro</label>
-                            <div className="flex gap-3">
-                                <button 
-                                    type="button" onClick={() => setPaymentMethod('Efectivo')}
-                                    className={`flex-1 py-3 rounded-xl border-2 font-black text-sm flex items-center justify-center gap-2 transition-all ${paymentMethod === 'Efectivo' ? 'bg-coffee-600 border-coffee-600 text-white' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}
-                                >
-                                    <Wallet size={16}/> Efectivo
-                                </button>
-                                <button 
-                                    type="button" onClick={() => setPaymentMethod('Transferencia')}
-                                    className={`flex-1 py-3 rounded-xl border-2 font-black text-sm flex items-center justify-center gap-2 transition-all ${paymentMethod === 'Transferencia' ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}
-                                >
-                                    <CreditCard size={16}/> Transfer
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button 
-                        type="submit" 
-                        className="w-full py-5 bg-green-600 text-white rounded-[1.5rem] font-black text-xl hover:bg-green-700 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
-                    >
-                        <CheckCircle size={24}/> CONFIRMAR COBRO
-                    </button>
-                </form>
-            </div>
+        <div className="fixed inset-0 bg-[#1C1C1C]/90 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-md">
+           <div className="bg-white rounded-t-[3rem] sm:rounded-[3rem] w-full max-w-md p-8 animate-slide-up border-t-8 border-red-500">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-[#1C1C1C]">Registrar Cobro</h3>
+                <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 text-[#1C1C1C]"><X size={28}/></button>
+              </div>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                addPaymentToSale(saleToPay.id, { id: crypto.randomUUID(), date: new Date().toISOString(), amount: Math.min(paymentAmount, saleToPay.balance), method: paymentMethod });
+                setIsPaymentModalOpen(false);
+              }} className="space-y-6">
+                 <div className="bg-red-50 p-6 rounded-[2rem] text-center border-2 border-red-100">
+                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 block">Deuda Actual</span>
+                    <p className="text-4xl font-black text-red-600 tracking-tighter">${saleToPay.balance.toLocaleString()}</p>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Monto a Entregar ($)</label>
+                    <input required autoFocus type="number" step="0.01" max={saleToPay.balance} className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-2xl font-black text-3xl text-center outline-none focus:border-[#6B7A3A]" value={paymentAmount || ''} onChange={e => setPaymentAmount(Number(e.target.value))} />
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => setPaymentMethod('Efectivo')} className={`p-4 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${paymentMethod === 'Efectivo' ? 'bg-[#1C1C1C] border-[#1C1C1C] text-[#E8DFC8]' : 'bg-white border-gray-100 text-gray-400'}`}><Wallet size={18}/> Efectivo</button>
+                    <button type="button" onClick={() => setPaymentMethod('Transferencia')} className={`p-4 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${paymentMethod === 'Transferencia' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-100 text-gray-400'}`}><CreditCard size={18}/> Transfer</button>
+                 </div>
+                 <button type="submit" className="w-full py-6 bg-[#6B7A3A] text-white rounded-[2rem] font-black text-xl uppercase italic shadow-2xl active:scale-95 transition-all">Confirmar Cobro</button>
+              </form>
+           </div>
         </div>
       )}
 
-      {/* CREATE / EDIT MODAL */}
+      {/* MODAL CREAR / EDITAR CLIENTE */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-gray-200">
-                <div className="p-6 border-b flex justify-between items-center bg-gray-50">
-                    <h3 className="font-black text-lg text-coffee-900">{isEditing ? 'Editar Datos del Cliente' : 'Registrar Nuevo Cliente'}</h3>
-                    <button onClick={closeModal} className="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={20}/></button>
-                </div>
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Nombre Completo <span className="text-red-500">*</span></label>
-                        <input required autoFocus placeholder="Ej. Juan Pérez" className="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-coffee-500 outline-none transition-all bg-white text-gray-900 font-bold" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Teléfono</label>
-                        <input placeholder="Ej. +54 9 11..." className="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-coffee-500 outline-none transition-all bg-white text-gray-900 font-bold" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Email</label>
-                        <input type="email" placeholder="cliente@email.com" className="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-coffee-500 outline-none transition-all bg-white text-gray-900 font-bold" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Notas / Preferencias</label>
-                        <textarea placeholder="Gustos, alérgenos, etc..." className="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-coffee-500 outline-none transition-all bg-white text-gray-900 font-bold" rows={3} value={clientForm.notes} onChange={e => setClientForm({...clientForm, notes: e.target.value})} />
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4 border-t mt-4">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 text-gray-400 font-bold hover:text-gray-600">Cancelar</button>
-                        <button type="submit" className="px-8 py-3 bg-coffee-600 text-white rounded-xl hover:bg-coffee-700 transition-all font-black shadow-lg">{isEditing ? 'ACTUALIZAR' : 'GUARDAR CLIENTE'}</button>
-                    </div>
-                </form>
-            </div>
+        <div className="fixed inset-0 bg-[#1C1C1C]/90 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-md">
+           <div className="bg-white rounded-t-[3rem] sm:rounded-[3rem] w-full max-w-md p-8 animate-slide-up border-t-8 border-[#6B7A3A]">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-[#1C1C1C]">{isEditing ? 'Editar Perfil' : 'Nuevo Cliente'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="p-2 text-[#1C1C1C]"><X size={28}/></button>
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                 <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Nombre Completo</label>
+                    <input required type="text" placeholder="Ej: Julian Gomez" className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl font-black outline-none focus:border-[#6B7A3A]" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Teléfono</label>
+                    <input type="text" placeholder="+54 9..." className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl font-black outline-none focus:border-[#6B7A3A]" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Preferencias / Notas</label>
+                    <textarea rows={3} placeholder="Notas del cliente..." className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl font-black outline-none focus:border-[#6B7A3A]" value={clientForm.notes} onChange={e => setClientForm({...clientForm, notes: e.target.value})} />
+                 </div>
+                 <button type="submit" className="w-full py-6 bg-[#1C1C1C] text-[#E8DFC8] rounded-[2rem] font-black text-xl uppercase italic shadow-2xl active:scale-95 transition-all border-b-8 border-black">
+                   {isEditing ? 'Actualizar Ficha' : 'Guardar Cliente'}
+                 </button>
+              </form>
+           </div>
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
-      {isDeleteModalOpen && selectedClient && (
-        <div className="fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
-           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-up border border-gray-200">
-              <div className="p-8 text-center">
-                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
-                    <AlertTriangle size={32} />
-                 </div>
-                 <h3 className="text-xl font-black text-gray-900 mb-2">¿Eliminar Cliente?</h3>
-                 <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                    Estás a punto de eliminar a <span className="font-bold text-gray-800">{selectedClient.name}</span>.<br/> 
-                    Esta acción no eliminará sus ventas pasadas, pero se perderá su registro de cuenta corriente.
-                 </p>
-                 <div className="flex gap-3 justify-center">
-                    <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-bold">Cancelar</button>
-                    <button onClick={confirmDelete} className="px-6 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 font-black shadow-lg">SÍ, ELIMINAR</button>
-                 </div>
+      {/* CONFIRMACIÓN ELIMINAR */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6 backdrop-blur-md">
+           <div className="bg-white rounded-[3rem] p-10 max-w-sm w-full text-center border-t-8 border-red-600 shadow-2xl">
+              <AlertTriangle className="mx-auto text-red-600 mb-4" size={56}/>
+              <h3 className="text-xl font-black uppercase mb-2 italic tracking-tighter">¿Borrar Cliente?</h3>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8 leading-relaxed">Se perderá la trazabilidad de su cuenta corriente de forma permanente.</p>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => { deleteClient(selectedClient!.id); setSelectedClient(null); setIsDeleteModalOpen(false); }} className="w-full py-5 bg-red-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">Confirmar Eliminación</button>
+                <button onClick={() => setIsDeleteModalOpen(false)} className="w-full py-5 bg-gray-100 text-gray-900 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancelar</button>
               </div>
            </div>
         </div>
