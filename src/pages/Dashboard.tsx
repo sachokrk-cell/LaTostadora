@@ -3,7 +3,7 @@ import { useStore } from '../context/StoreContext';
 import { 
   TrendingUp, Target, Users, Package, AlertTriangle, 
   Coffee, ChevronRight, ArrowUpRight, Calendar, 
-  DollarSign, Info, UserX, ShoppingBag, X, Check, Edit3
+  DollarSign, Info, UserX, ShoppingBag, X, Check, Edit3, BarChart2
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -19,186 +19,216 @@ const Dashboard = () => {
   // ESTADOS
   const [activeView, setActiveView] = useState<'none' | 'sold' | 'consumed' | 'lowStock' | 'dormant'>('none');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [tempGoal, setTempGoal] = useState(monthlyGoal);
   const [tempThreshold, setTempThreshold] = useState(stockThreshold);
 
-  // Sincronizar configuraciones locales con el contexto
   useEffect(() => {
     setTempGoal(monthlyGoal);
     setTempThreshold(stockThreshold);
   }, [monthlyGoal, stockThreshold]);
 
-  // --- 1. FILTRADO DE DATOS ---
-  const filteredData = useMemo(() => {
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, 1).toISOString().split('T')[0];
-    const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
-
-    const filterByRange = (list: any[]) => list.filter(item => {
-      const itemDate = item.date.split('T')[0];
-      const matchesStart = dateRange.start ? itemDate >= dateRange.start : true;
-      const matchesEnd = dateRange.end ? itemDate <= dateRange.end : true;
+  // --- 1. FILTRADO MAESTRO (TODO DEPENDE DE ESTO) ---
+  const filteredSales = useMemo(() => {
+    return sales.filter(s => {
+      const sDate = s.date.split('T')[0];
+      const matchesStart = dateRange.start ? sDate >= dateRange.start : true;
+      const matchesEnd = dateRange.end ? sDate <= dateRange.end : true;
       return matchesStart && matchesEnd;
     });
+  }, [sales, dateRange]);
 
-    const fSales = filterByRange(sales);
-    const fConsumptions = filterByRange(consumptions);
+  const filteredConsumptions = useMemo(() => {
+    return consumptions.filter(c => {
+      const cDate = c.date.split('T')[0];
+      const matchesStart = dateRange.start ? cDate >= dateRange.start : true;
+      const matchesEnd = dateRange.end ? cDate <= dateRange.end : true;
+      return matchesStart && matchesEnd;
+    });
+  }, [consumptions, dateRange]);
+
+  // --- 2. MÉTRICAS DE PERIODOS ---
+  const periods = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0];
+    const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
 
     return {
-      sales: fSales,
-      consumptions: fConsumptions,
-      currentMonthRev: sales.filter(s => s.date.split('T')[0] >= startOfMonth).reduce((acc, s) => acc + s.total, 0),
-      last3MonthsRev: sales.filter(s => s.date.split('T')[0] >= threeMonthsAgo).reduce((acc, s) => acc + s.total, 0),
-      currentYearRev: sales.filter(s => s.date.split('T')[0] >= startOfYear).reduce((acc, s) => acc + s.total, 0),
-      allTimeRev: sales.reduce((acc, s) => acc + s.total, 0),
-      totalFilteredRev: fSales.reduce((acc, s) => acc + s.total, 0)
+      range: filteredSales.reduce((acc, s) => acc + s.total, 0),
+      month: sales.filter(s => s.date.split('T')[0] >= startOfMonth).reduce((acc, s) => acc + s.total, 0),
+      quarter: sales.filter(s => s.date.split('T')[0] >= threeMonthsAgo).reduce((acc, s) => acc + s.total, 0),
+      year: sales.filter(s => s.date.split('T')[0] >= startOfYear).reduce((acc, s) => acc + s.total, 0),
+      allTime: sales.reduce((acc, s) => acc + s.total, 0)
     };
-  }, [sales, consumptions, dateRange]);
+  }, [sales, filteredSales]);
 
-  // --- 2. ANÁLISIS DE UNIDADES Y RENTABILIDAD ---
+  // --- 3. ANÁLISIS DE PRODUCTOS (SOLUCIÓN DUPLICADOS) ---
   const analysis = useMemo(() => {
-    const soldItems: Record<string, any> = {};
-    const consumedItems: Record<string, any> = {};
+    const soldMap: Record<string, any> = {};
+    const consumedMap: Record<string, any> = {};
     let totalProfit = 0;
-    let unitsSold = 0;
-    let unitsConsumed = 0;
+    let uSold = 0;
+    let uConsumed = 0;
 
-    filteredData.sales.forEach(sale => {
+    filteredSales.forEach(sale => {
       sale.items?.forEach((item: any) => {
-        unitsSold += item.quantity;
-        const prod = products.find(p => p.id === item.id || p.id === item.product_id);
+        const pId = (item.id || item.product_id || '').toLowerCase(); // Normalizamos ID
+        if (!pId) return;
+
+        uSold += item.quantity;
+        const prod = products.find(p => p.id.toLowerCase() === pId);
         const cost = prod ? prod.costPrice : 0;
         const profit = (item.appliedPrice - cost) * item.quantity;
         totalProfit += profit;
 
-        const id = item.id || item.product_id;
-        if (!soldItems[id]) soldItems[id] = { name: item.name, qty: 0, profit: 0 };
-        soldItems[id].qty += item.quantity;
-        soldItems[id].profit += profit;
+        if (!soldMap[pId]) soldMap[pId] = { name: item.name, qty: 0, profit: 0 };
+        soldMap[pId].qty += item.quantity;
+        soldMap[pId].profit += profit;
       });
     });
 
-    filteredData.consumptions.forEach(c => {
-      unitsConsumed += c.quantity;
-      const id = c.productId || c.product_id;
-      if (!consumedItems[id]) consumedItems[id] = { name: c.productName || c.name, qty: 0 };
-      consumedItems[id].qty += c.quantity;
+    filteredConsumptions.forEach(c => {
+      const pId = (c.productId || c.product_id || '').toLowerCase();
+      uConsumed += c.quantity;
+      if (!consumedMap[pId]) consumedMap[pId] = { name: c.productName || 'Variedad Desconocida', qty: 0 };
+      consumedMap[pId].qty += c.quantity;
     });
 
-    return { unitsSold, unitsConsumed, totalProfit, soldItems, consumedItems };
-  }, [filteredData, products]);
+    return { uSold, uConsumed, totalProfit, soldMap, consumedMap };
+  }, [filteredSales, filteredConsumptions, products]);
 
-  // --- 3. CLIENTES DORMIDOS Y STOCK ---
-  const dormantClients = useMemo(() => {
-    const fortyFiveDaysAgo = new Date();
-    fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
-    
-    return clients.filter(client => {
-      const clientSales = sales.filter(s => s.clientId === client.id);
-      if (clientSales.length === 0) return true;
-      const lastSaleDate = new Date(Math.max(...clientSales.map(s => new Date(s.date).getTime())));
-      return lastSaleDate < fortyFiveDaysAgo;
+  // --- 4. COMPARATIVO ANUAL ---
+  const chartData = useMemo(() => {
+    const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const currentYear = new Date().getFullYear();
+    return months.map((m, i) => {
+      const actual = sales.filter(s => {
+        const d = new Date(s.date);
+        return d.getMonth() === i && d.getFullYear() === currentYear;
+      }).reduce((acc, s) => acc + s.total, 0);
+
+      const anterior = sales.filter(s => {
+        const d = new Date(s.date);
+        return d.getMonth() === i && d.getFullYear() === currentYear - 1;
+      }).reduce((acc, s) => acc + s.total, 0);
+
+      return { name: m, actual, anterior };
     });
+  }, [sales]);
+
+  // --- 5. LOGICA DE ALERTAS ---
+  const dormantCount = useMemo(() => {
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 45);
+    return clients.filter(c => {
+      const cSales = sales.filter(s => s.clientId === c.id);
+      if (cSales.length === 0) return true;
+      return new Date(Math.max(...cSales.map(s => new Date(s.date).getTime()))) < limit;
+    }).length;
   }, [clients, sales]);
 
-  const lowStockProducts = products.filter(p => p.stock <= stockThreshold);
-
-  // --- 4. TOP RANKINGS ---
-  const topVarieties = Object.values(analysis.soldItems)
-    .sort((a: any, b: any) => b.qty - a.qty)
-    .slice(0, 5);
-
-  const topClients = clients.map(c => {
-    const cSales = sales.filter(s => s.clientId === c.id);
-    const spent = cSales.reduce((acc, s) => acc + s.total, 0);
-    const varietyCounts: any = {};
-    cSales.forEach(s => s.items?.forEach((i: any) => varietyCounts[i.name] = (varietyCounts[i.name] || 0) + i.quantity));
-    const fav = Object.entries(varietyCounts).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '---';
-    return { ...c, spent, fav };
-  }).sort((a, b) => b.spent - a.spent).slice(0, 5);
-
-  // --- ACCIONES ---
-  const handleUpdateSettings = async () => {
+  const handleSaveSettings = async () => {
     await updateGlobalSettings(tempGoal, tempThreshold);
-    setIsEditingGoal(false);
+    setIsEditingSettings(false);
   };
 
-  if (isLoading) return <div className="p-20 text-center font-black animate-pulse">CARGANDO DATOS...</div>;
+  if (isLoading) return <div className="p-20 text-center font-black animate-pulse uppercase">Sincronizando La Tostadora...</div>;
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-white min-h-screen pb-32 text-[#1C1C1C]">
       
-      {/* HEADER Y FILTROS */}
-      <div className="flex flex-col lg:flex-row justify-between gap-6">
-        <h2 className="text-4xl font-black uppercase italic tracking-tighter">La Tostadora <span className="text-[#6B7A3A]">Dashboard</span></h2>
-        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-3xl border-2 border-gray-100">
-          <Calendar size={18} className="ml-2 text-gray-400" />
-          <input type="date" className="bg-transparent font-bold text-xs p-2 outline-none" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
-          <span className="text-gray-300">/</span>
-          <input type="date" className="bg-transparent font-bold text-xs p-2 outline-none" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
+      {/* HEADER & FILTROS */}
+      <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
+        <div>
+          <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Control <span className="text-[#6B7A3A]">Total</span></h2>
+          <p className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em] mt-2">Dashboard de Rendimiento</p>
+        </div>
+
+        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-[2rem] border-2 border-gray-100 shadow-inner">
+          <Calendar size={18} className="text-[#6B7A3A] ml-2" />
+          <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="bg-transparent font-black text-[10px] outline-none" />
+          <span className="text-gray-300 font-bold">/</span>
+          <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="bg-transparent font-black text-[10px] outline-none" />
           {(dateRange.start || dateRange.end) && (
-            <button onClick={() => setDateRange({start: '', end: ''})} className="p-2 text-red-500"><X size={16}/></button>
+            <button onClick={() => setDateRange({start:'', end:''})} className="p-1.5 bg-red-100 text-red-600 rounded-full hover:rotate-90 transition-all"><X size={14}/></button>
           )}
         </div>
       </div>
 
-      {/* KPI CARDS */}
+      {/* MÉTRICAS PRINCIPALES (BASADAS EN FILTRO) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Mes Actual', value: filteredData.currentMonthRev, icon: <Coffee /> },
-          { label: '3 Meses', value: filteredData.last3MonthsRev, icon: <TrendingUp /> },
-          { label: 'Año actual', value: filteredData.currentYearRev, icon: <ShoppingBag /> },
-          { label: 'Histórico', value: filteredData.allTimeRev, icon: <DollarSign /> },
-        ].map((kpi, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">{kpi.label}</p>
-            <p className="text-2xl font-black">${kpi.value.toLocaleString()}</p>
+          { label: 'Rango Seleccionado', val: periods.range, color: 'text-[#6B7A3A]' },
+          { label: 'Este Mes', val: periods.month, color: 'text-[#1C1C1C]' },
+          { label: 'Últimos 3 Meses', val: periods.quarter, color: 'text-[#1C1C1C]' },
+          { label: 'Histórico Total', val: periods.allTime, color: 'text-gray-400' }
+        ].map((k, i) => (
+          <div key={i} className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100">
+            <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">{k.label}</p>
+            <p className={`text-3xl font-black tracking-tighter ${k.color}`}>${k.val.toLocaleString()}</p>
           </div>
         ))}
       </div>
 
-      {/* OBJETIVO Y STOCK CONFIG */}
+      {/* OBJETIVO Y STOCK (EDITABLES) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#1C1C1C] p-8 rounded-[3rem] text-white">
+        <div className="lg:col-span-2 bg-[#1C1C1C] p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#6B7A3A]">Objetivo Mensual</h3>
-            <button onClick={() => setIsEditingGoal(!isEditingGoal)} className="p-2 hover:bg-white/10 rounded-full"><Edit3 size={16}/></button>
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#6B7A3A]">Meta de Ventas Mensual</h3>
+            <button onClick={() => setIsEditingSettings(!isEditingSettings)} className="p-2 hover:bg-white/10 rounded-full transition-all">
+              {isEditingSettings ? <X size={20}/> : <Edit3 size={18}/>}
+            </button>
           </div>
-          {isEditingGoal ? (
-            <div className="flex gap-4 mb-4">
-              <input type="number" className="bg-white/10 border border-[#6B7A3A] p-2 rounded-xl text-white font-black" value={tempGoal} onChange={e => setTempGoal(Number(e.target.value))} />
-              <button onClick={handleUpdateSettings} className="bg-[#6B7A3A] p-2 rounded-xl"><Check size={20}/></button>
+          
+          {isEditingSettings ? (
+            <div className="flex items-center gap-4 animate-fade-in mb-4">
+              <div className="flex-1">
+                <p className="text-[9px] font-black uppercase text-gray-500 mb-1 ml-1">Nuevo Objetivo ($)</p>
+                <input type="number" value={tempGoal} onChange={e => setTempGoal(Number(e.target.value))} className="w-full bg-white/10 border-2 border-[#6B7A3A] p-4 rounded-2xl text-2xl font-black outline-none" />
+              </div>
+              <button onClick={handleSaveSettings} className="bg-[#6B7A3A] p-5 rounded-2xl mt-5 hover:scale-105 transition-all"><Check size={28}/></button>
             </div>
           ) : (
-            <p className="text-4xl font-black italic mb-4">${filteredData.currentMonthRev.toLocaleString()} <span className="text-lg text-gray-500 font-normal">/ ${monthlyGoal.toLocaleString()}</span></p>
+            <>
+              <p className="text-5xl font-black italic tracking-tighter mb-4">
+                ${periods.month.toLocaleString()} <span className="text-xl text-gray-500 font-normal">/ ${monthlyGoal.toLocaleString()}</span>
+              </p>
+              <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                <div className="h-full bg-[#6B7A3A] shadow-[0_0_15px_rgba(107,122,58,0.5)] transition-all duration-1000" style={{ width: `${Math.min((periods.month/monthlyGoal)*100, 100)}%` }}></div>
+              </div>
+            </>
           )}
-          <div className="h-4 bg-white/5 rounded-full overflow-hidden">
-            <div className="h-full bg-[#6B7A3A] transition-all duration-1000" style={{ width: `${Math.min((filteredData.currentMonthRev/monthlyGoal)*100, 100)}%` }}></div>
-          </div>
         </div>
 
-        <div onClick={() => setActiveView(activeView === 'lowStock' ? 'none' : 'lowStock')} className={`p-8 rounded-[3rem] border-2 cursor-pointer transition-all ${lowStockProducts.length > 0 ? 'bg-red-50 border-red-200 animate-pulse' : 'bg-gray-50'}`}>
-          <div className="flex justify-between items-center mb-4">
-            <AlertTriangle className={lowStockProducts.length > 0 ? 'text-red-600' : 'text-gray-300'} />
-            {isEditingGoal ? (
-              <input type="number" className="w-16 bg-white p-1 rounded-lg text-xs font-black border border-red-200" value={tempThreshold} onChange={e => setTempThreshold(Number(e.target.value))} />
+        <div className={`p-8 rounded-[3rem] border-2 transition-all flex flex-col justify-between ${products.filter(p => p.stock <= stockThreshold).length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
+          <div className="flex justify-between items-center">
+            <AlertTriangle className={products.filter(p => p.stock <= stockThreshold).length > 0 ? 'text-red-600 animate-pulse' : 'text-gray-300'} />
+            {isEditingSettings ? (
+              <div className="text-right">
+                <p className="text-[8px] font-black uppercase text-red-400">Stock Bajo si es ≤</p>
+                <input type="number" value={tempThreshold} onChange={e => setTempThreshold(Number(e.target.value))} className="w-16 bg-white border-2 border-red-200 p-1 rounded-lg text-center font-black" />
+              </div>
             ) : (
-              <span className="text-[10px] font-black uppercase text-gray-400">Umbral: {stockThreshold}u</span>
+              <span className="text-[9px] font-black uppercase text-gray-400">Umbral: {stockThreshold}u</span>
             )}
           </div>
-          <p className="text-xs font-black uppercase tracking-widest text-red-600">Stock Crítico</p>
-          <p className="text-5xl font-black">{lowStockProducts.length}</p>
+          <div onClick={() => setActiveView(activeView === 'lowStock' ? 'none' : 'lowStock')} className="cursor-pointer">
+            <p className="text-[10px] font-black uppercase text-red-600 tracking-widest">Stock Crítico</p>
+            <p className="text-5xl font-black tracking-tighter">{products.filter(p => p.stock <= stockThreshold).length}</p>
+          </div>
         </div>
       </div>
 
-      {/* VENDIDO VS CONSUMIDO (BOTONES) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <button onClick={() => setActiveView(activeView === 'sold' ? 'none' : 'sold')} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex justify-between items-center hover:shadow-xl transition-all">
-          <div className="text-left">
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Unidades Vendidas</p>
-            <p className="text-4xl font-black italic">{analysis.unitsSold} u.</p>
+      {/* ANALISIS DE UNIDADES (VENDIDAS VS CONSUMIDAS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <button onClick={() => setActiveView(activeView === 'sold' ? 'none' : 'sold')} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex items-center justify-between hover:shadow-xl transition-all">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-[#6B7A3A]/10 text-[#6B7A3A] rounded-3xl flex items-center justify-center"><ShoppingBag size={32}/></div>
+            <div className="text-left">
+              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Unidades Vendidas</p>
+              <p className="text-4xl font-black italic tracking-tighter">{analysis.uSold} u.</p>
+            </div>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-black uppercase text-[#6B7A3A]">Rentabilidad</p>
@@ -206,83 +236,84 @@ const Dashboard = () => {
           </div>
         </button>
 
-        <button onClick={() => setActiveView(activeView === 'consumed' ? 'none' : 'consumed')} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex justify-between items-center hover:shadow-xl transition-all">
-          <div className="text-left">
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Consumo Propio</p>
-            <p className="text-4xl font-black italic">{analysis.unitsConsumed} u.</p>
+        <button onClick={() => setActiveView(activeView === 'consumed' ? 'none' : 'consumed')} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex items-center justify-between hover:shadow-xl transition-all">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center"><Coffee size={32}/></div>
+            <div className="text-left">
+              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Consumo Propio</p>
+              <p className="text-4xl font-black italic tracking-tighter">{analysis.uConsumed} u.</p>
+            </div>
           </div>
-          <Info className="text-amber-500" size={32} />
+          <div className="flex flex-col items-end">
+            <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100 px-2 py-1 rounded-full mb-1">Total Acumulado</span>
+            <ChevronRight size={20} className="text-amber-300" />
+          </div>
         </button>
       </div>
 
       {/* PANEL INTERACTIVO DE DETALLES */}
       {activeView !== 'none' && (
-        <div className="bg-gray-50 p-8 rounded-[3rem] border-2 border-[#6B7A3A]/20 animate-slide-up">
-          <div className="flex justify-between mb-6">
-            <h3 className="font-black uppercase italic">{activeView === 'sold' ? 'Detalle de Rentabilidad' : activeView === 'consumed' ? 'Detalle de Consumos' : activeView === 'lowStock' ? 'Variedades a Reponer' : 'Clientes Ausentes'}</h3>
-            <button onClick={() => setActiveView('none')}><X /></button>
+        <div className="bg-gray-50 rounded-[3rem] p-8 border-2 border-[#6B7A3A]/20 animate-slide-up">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+              {activeView === 'sold' && 'Desglose de Rentabilidad'}
+              {activeView === 'consumed' && 'Detalle de Consumos'}
+              {activeView === 'lowStock' && 'Productos por agotar'}
+            </h3>
+            <button onClick={() => setActiveView('none')} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeView === 'sold' && Object.values(analysis.soldItems).map((p: any, i) => (
-              <div key={i} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm">
+            {activeView === 'sold' && Object.values(analysis.soldMap).map((p: any, i) => (
+              <div key={i} className="bg-white p-5 rounded-2xl flex justify-between items-center border-2 border-gray-100">
                 <div><p className="font-black text-sm uppercase">{p.name}</p><p className="text-[10px] text-gray-400 font-bold">{p.qty} unidades</p></div>
-                <p className="font-black text-[#6B7A3A]">+${p.profit.toLocaleString()}</p>
+                <p className="font-black text-[#6B7A3A] text-lg">+${p.profit.toLocaleString()}</p>
               </div>
             ))}
-            {activeView === 'consumed' && Object.values(analysis.consumedItems).map((p: any, i) => (
-              <div key={i} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm">
+            {activeView === 'consumed' && Object.values(analysis.consumedMap).map((p: any, i) => (
+              <div key={i} className="bg-white p-5 rounded-2xl flex justify-between items-center border-2 border-gray-100">
                 <p className="font-black text-sm uppercase">{p.name}</p>
-                <p className="font-black text-amber-600">{p.qty} u.</p>
+                <p className="font-black text-amber-600 text-lg">{p.qty} u.</p>
               </div>
             ))}
-            {activeView === 'lowStock' && lowStockProducts.map((p, i) => (
-              <div key={i} className="bg-white p-4 rounded-2xl flex justify-between items-center border border-red-100">
+            {activeView === 'lowStock' && products.filter(p => p.stock <= stockThreshold).map((p, i) => (
+              <div key={i} className="bg-white p-5 rounded-2xl flex justify-between items-center border-2 border-red-100">
                 <p className="font-black text-sm uppercase">{p.name}</p>
-                <p className="font-black text-red-600">{p.stock} u.</p>
-              </div>
-            ))}
-            {activeView === 'dormant' && dormantClients.map((c, i) => (
-              <div key={i} className="bg-white p-4 rounded-2xl shadow-sm">
-                <p className="font-black text-sm uppercase">{c.name}</p>
-                <p className="text-[9px] font-bold text-red-500 uppercase">Sin compras hace +45 días</p>
+                <p className="font-black text-red-600 text-lg">{p.stock} disp.</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* RANKINGS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Users size={16}/> Top 5 Clientes</h3>
-            <button onClick={() => setActiveView('dormant')} className="text-[9px] font-black bg-red-50 text-red-600 px-3 py-1 rounded-full">{dormantClients.length} Inactivos</button>
+      {/* COMPARATIVA ANUAL (LÍNEAS) */}
+      <div className="bg-[#1C1C1C] p-8 md:p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
+        <div className="relative z-10">
+          <div className="flex justify-between items-center mb-12">
+            <div>
+              <h3 className="text-2xl font-black uppercase italic tracking-tighter">Comparativo de Ventas Anual</h3>
+              <p className="text-[9px] font-black uppercase text-gray-500 tracking-[0.3em]">Cifras expresadas en Pesos ($)</p>
+            </div>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#6B7A3A]"/> <span className="text-[10px] font-black uppercase">Actual</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-white/10"/> <span className="text-[10px] font-black uppercase">Anterior</span></div>
+            </div>
           </div>
-          <div className="space-y-3">
-            {topClients.map((c, i) => (
-              <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 bg-[#1C1C1C] text-white rounded-full flex items-center justify-center text-[10px] font-black">{i+1}</span>
-                  <div><p className="font-black text-xs uppercase">{c.name}</p><p className="text-[8px] font-bold text-[#6B7A3A] uppercase">Prefiere: {c.fav}</p></div>
-                </div>
-                <p className="font-black text-sm">${c.spent.toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100">
-          <h3 className="text-xs font-black uppercase tracking-widest mb-6">Top 5 Variedades</h3>
-          <div className="space-y-3">
-            {topVarieties.map((p: any, i) => (
-              <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
-                <div className="flex items-center gap-3">
-                  <span className="w-8 h-8 bg-[#6B7A3A] text-white rounded-lg flex items-center justify-center text-[10px] font-black">{p.qty}</span>
-                  <p className="font-black text-xs uppercase">{p.name}</p>
-                </div>
-                <p className="font-black text-sm text-[#6B7A3A]">+${p.profit.toLocaleString()}</p>
-              </div>
-            ))}
+          <div className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6B7A3A" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#6B7A3A" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#666', fontSize: 10, fontWeight: 'bold'}} />
+                <Tooltip contentStyle={{ backgroundColor: '#1C1C1C', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px' }} />
+                <Area type="monotone" dataKey="actual" stroke="#6B7A3A" strokeWidth={5} fill="url(#colorAct)" />
+                <Area type="monotone" dataKey="anterior" stroke="rgba(255,255,255,0.1)" strokeWidth={2} fill="transparent" strokeDasharray="10 5" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
