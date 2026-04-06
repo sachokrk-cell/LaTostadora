@@ -12,7 +12,7 @@ import {
 
 const Dashboard = () => {
   const { 
-    sales, products, clients, consumptions, 
+    sales = [], products = [], clients = [], consumptions = [], 
     monthlyGoal, stockThreshold, updateGlobalSettings, isLoading 
   } = useStore();
 
@@ -20,18 +20,18 @@ const Dashboard = () => {
   const [activeView, setActiveView] = useState<'none' | 'sold' | 'consumed' | 'lowStock' | 'dormant'>('none');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
-  const [tempGoal, setTempGoal] = useState(monthlyGoal);
-  const [tempThreshold, setTempThreshold] = useState(stockThreshold);
+  const [tempGoal, setTempGoal] = useState(monthlyGoal || 0);
+  const [tempThreshold, setTempThreshold] = useState(stockThreshold || 0);
 
-  // Sincronizar estados locales cuando cambian los globales
   useEffect(() => {
     setTempGoal(monthlyGoal);
     setTempThreshold(stockThreshold);
   }, [monthlyGoal, stockThreshold]);
 
-  // --- 1. FILTRADO POR FECHA (APLICA A TODO EL DASHBOARD) ---
+  // --- 1. FILTRADO SEGURO ---
   const filteredSales = useMemo(() => {
     return sales.filter(s => {
+      if (!s?.date) return false;
       const sDate = s.date.substring(0, 10);
       const matchesStart = dateRange.start ? sDate >= dateRange.start : true;
       const matchesEnd = dateRange.end ? sDate <= dateRange.end : true;
@@ -41,6 +41,7 @@ const Dashboard = () => {
 
   const filteredConsumptions = useMemo(() => {
     return consumptions.filter(c => {
+      if (!c?.date) return false;
       const cDate = c.date.substring(0, 10);
       const matchesStart = dateRange.start ? cDate >= dateRange.start : true;
       const matchesEnd = dateRange.end ? cDate <= dateRange.end : true;
@@ -48,23 +49,22 @@ const Dashboard = () => {
     });
   }, [consumptions, dateRange]);
 
-  // --- 2. MÉTRICAS DE PERIODOS ---
+  // --- 2. MÉTRICAS ---
   const periods = useMemo(() => {
-    const today = new Date().toISOString().substring(0, 10);
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().substring(0, 10);
     const threeMonthsAgo = new Date(new Date().getFullYear(), new Date().getMonth() - 3, 1).toISOString().substring(0, 10);
     const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().substring(0, 10);
 
     return {
-      range: filteredSales.reduce((acc, s) => acc + s.total, 0),
-      month: sales.filter(s => s.date.substring(0, 10) >= startOfMonth).reduce((acc, s) => acc + s.total, 0),
-      quarter: sales.filter(s => s.date.substring(0, 10) >= threeMonthsAgo).reduce((acc, s) => acc + s.total, 0),
-      year: sales.filter(s => s.date.substring(0, 10) >= startOfYear).reduce((acc, s) => acc + s.total, 0),
-      allTime: sales.reduce((acc, s) => acc + s.total, 0)
+      range: filteredSales.reduce((acc, s) => acc + (s.total || 0), 0),
+      month: sales.filter(s => (s.date || '').substring(0, 10) >= startOfMonth).reduce((acc, s) => acc + (s.total || 0), 0),
+      quarter: sales.filter(s => (s.date || '').substring(0, 10) >= threeMonthsAgo).reduce((acc, s) => acc + (s.total || 0), 0),
+      year: sales.filter(s => (s.date || '').substring(0, 10) >= startOfYear).reduce((acc, s) => acc + (s.total || 0), 0),
+      allTime: sales.reduce((acc, s) => acc + (s.total || 0), 0)
     };
   }, [sales, filteredSales]);
 
-  // --- 3. ANÁLISIS DE RENTABILIDAD Y UNIDADES (SIN DUPLICADOS) ---
+  // --- 3. ANÁLISIS DE PRODUCTOS (SIN DUPLICADOS Y SEGURO) ---
   const analysis = useMemo(() => {
     const soldMap: Record<string, any> = {};
     const consumedMap: Record<string, any> = {};
@@ -74,36 +74,39 @@ const Dashboard = () => {
 
     filteredSales.forEach(sale => {
       sale.items?.forEach((item: any) => {
-        // Normalizamos el ID para evitar el error del Catuai duplicado
-        const pId = (item.id || item.product_id).toLowerCase();
-        uSold += item.quantity;
+        const idRaw = item.id || item.product_id;
+        if (!idRaw) return;
+        const pId = idRaw.toLowerCase();
         
-        const prod = products.find(p => p.id.toLowerCase() === pId);
-        const cost = prod ? prod.costPrice : 0;
-        const profit = (item.appliedPrice - cost) * item.quantity;
+        uSold += (item.quantity || 0);
+        const prod = products.find(p => p.id?.toLowerCase() === pId);
+        const cost = prod ? (prod.costPrice || 0) : 0;
+        const profit = ((item.appliedPrice || 0) - cost) * (item.quantity || 0);
         totalProfit += profit;
 
-        if (!soldMap[pId]) soldMap[pId] = { name: item.name, qty: 0, profit: 0 };
-        soldMap[pId].qty += item.quantity;
+        if (!soldMap[pId]) soldMap[pId] = { name: item.name || 'Desconocido', qty: 0, profit: 0 };
+        soldMap[pId].qty += (item.quantity || 0);
         soldMap[pId].profit += profit;
       });
     });
 
     filteredConsumptions.forEach(c => {
-      const pId = (c.productId || c.product_id).toLowerCase();
-      uConsumed += c.quantity;
-      if (!consumedMap[pId]) consumedMap[pId] = { name: c.productName, qty: 0 };
-      consumedMap[pId].qty += c.quantity;
+      const idRaw = c.productId || c.product_id;
+      if (!idRaw) return;
+      const pId = idRaw.toLowerCase();
+      uConsumed += (c.quantity || 0);
+      if (!consumedMap[pId]) consumedMap[pId] = { name: c.productName || 'Variedad', qty: 0 };
+      consumedMap[pId].qty += (c.quantity || 0);
     });
 
     return { uSold, uConsumed, totalProfit, soldMap, consumedMap };
   }, [filteredSales, filteredConsumptions, products]);
 
-  // --- 4. RANKINGS (CLIENTES Y VARIEDADES) ---
+  // --- 4. RANKINGS ---
   const topClients = useMemo(() => {
     return clients.map(c => {
       const cSales = sales.filter(s => s.clientId === c.id);
-      const spent = cSales.reduce((acc, s) => acc + s.total, 0);
+      const spent = cSales.reduce((acc, s) => acc + (s.total || 0), 0);
       const varietyCount: Record<string, number> = {};
       cSales.forEach(s => s.items?.forEach((i: any) => varietyCount[i.name] = (varietyCount[i.name] || 0) + i.quantity));
       const fav = Object.entries(varietyCount).sort((a,b) => b[1] - a[1])[0]?.[0] || '---';
@@ -117,19 +120,19 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [analysis.soldMap]);
 
-  // --- 5. CLIENTES INACTIVOS (>45 DÍAS) ---
+  // --- 5. CLIENTES INACTIVOS ---
   const dormantClients = useMemo(() => {
     const limit = new Date();
     limit.setDate(limit.getDate() - 45);
     return clients.filter(c => {
       const cSales = sales.filter(s => s.clientId === c.id);
       if (cSales.length === 0) return true;
-      const lastDate = new Date(Math.max(...cSales.map(s => new Date(s.date).getTime())));
+      const lastDate = new Date(Math.max(...cSales.map(s => new Date(s.date || 0).getTime())));
       return lastDate < limit;
     });
   }, [clients, sales]);
 
-  // --- 6. GRÁFICO COMPARATIVO ANUAL ---
+  // --- 6. GRÁFICO ANUAL ---
   const chartData = useMemo(() => {
     const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     const currentYear = new Date().getFullYear();
@@ -137,11 +140,11 @@ const Dashboard = () => {
       const actual = sales.filter(s => {
         const d = new Date(s.date);
         return d.getMonth() === i && d.getFullYear() === currentYear;
-      }).reduce((acc, s) => acc + s.total, 0);
+      }).reduce((acc, s) => acc + (s.total || 0), 0);
       const anterior = sales.filter(s => {
         const d = new Date(s.date);
         return d.getMonth() === i && d.getFullYear() === currentYear - 1;
-      }).reduce((acc, s) => acc + s.total, 0);
+      }).reduce((acc, s) => acc + (s.total || 0), 0);
       return { name: m, actual, anterior };
     });
   }, [sales]);
@@ -151,35 +154,37 @@ const Dashboard = () => {
     setIsEditingSettings(false);
   };
 
+  if (isLoading) return <div className="h-screen flex items-center justify-center font-black uppercase tracking-widest animate-pulse">Sincronizando datos...</div>;
+
   return (
     <div className="p-4 md:p-8 space-y-8 bg-white min-h-screen pb-32 text-[#1C1C1C]">
       
       {/* HEADER & FILTROS */}
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
-          <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Dashboard</h2>
-          <p className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em]">La Tostadora v.Final</p>
+          <h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none">Dashboard</h2>
+          <p className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em]">Control de Gestión</p>
         </div>
 
         <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-[2rem] border-2 border-gray-100">
           <Calendar size={18} className="text-[#6B7A3A] ml-2" />
-          <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="bg-transparent font-black text-[10px] outline-none uppercase" />
+          <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="bg-transparent font-black text-[10px] outline-none" />
           <span className="text-gray-300">/</span>
-          <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="bg-transparent font-black text-[10px] outline-none uppercase" />
+          <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="bg-transparent font-black text-[10px] outline-none" />
           {(dateRange.start || dateRange.end) && (
             <button onClick={() => setDateRange({start:'', end:''})} className="p-1.5 bg-red-100 text-red-600 rounded-full hover:scale-110 transition-all"><X size={14}/></button>
           )}
         </div>
       </div>
 
-      {/* KPI CARDS (RESPONDEN AL FILTRO) */}
+      {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-[2.5rem] border-2 border-[#6B7A3A]/20 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">En el Rango Seleccionado</p>
+          <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">Rango Seleccionado</p>
           <p className="text-3xl font-black text-[#6B7A3A]">${periods.range.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">Ventas del Mes</p>
+          <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">Este Mes</p>
           <p className="text-3xl font-black">${periods.month.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm">
@@ -192,7 +197,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* OBJETIVO Y STOCK (CONFIGURABLES) */}
+      {/* OBJETIVO Y STOCK (EDITABLES) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-[#1C1C1C] p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
           <div className="flex justify-between items-center mb-6">
@@ -205,15 +210,15 @@ const Dashboard = () => {
           {isEditingSettings ? (
             <div className="flex items-center gap-4 animate-fade-in mb-4">
               <input type="number" value={tempGoal} onChange={e => setTempGoal(Number(e.target.value))} className="bg-white/10 border-2 border-[#6B7A3A] p-4 rounded-2xl text-2xl font-black w-full outline-none" />
-              <button onClick={handleSaveSettings} className="bg-[#6B7A3A] p-5 rounded-2xl hover:scale-105 transition-all"><Check size={28}/></button>
+              <button onClick={handleSaveSettings} className="bg-[#6B7A3A] p-5 rounded-2xl mt-5 hover:scale-105 transition-all"><Check size={28}/></button>
             </div>
           ) : (
             <>
               <p className="text-5xl font-black italic tracking-tighter mb-4">
-                ${periods.month.toLocaleString()} <span className="text-xl text-gray-500 font-normal">/ ${monthlyGoal.toLocaleString()}</span>
+                ${periods.month.toLocaleString()} <span className="text-xl text-gray-500 font-normal">/ ${(monthlyGoal || 0).toLocaleString()}</span>
               </p>
               <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/10">
-                <div className="h-full bg-[#6B7A3A] shadow-[0_0_15px_rgba(107,122,58,0.5)] transition-all duration-1000" style={{ width: `${Math.min((periods.month/monthlyGoal)*100, 100)}%` }}></div>
+                <div className="h-full bg-[#6B7A3A] shadow-[0_0_15px_rgba(107,122,58,0.5)] transition-all duration-1000" style={{ width: `${Math.min((periods.month/(monthlyGoal || 1))*100, 100)}%` }}></div>
               </div>
             </>
           )}
@@ -225,7 +230,7 @@ const Dashboard = () => {
             {isEditingSettings ? (
               <input type="number" value={tempThreshold} onChange={e => setTempThreshold(Number(e.target.value))} className="w-16 bg-white border-2 border-red-200 p-1 rounded-lg text-center font-black" onClick={e => e.stopPropagation()} />
             ) : (
-              <span className="text-[9px] font-black uppercase text-gray-400 tracking-[0.2em]">Config: {stockThreshold}u</span>
+              <span className="text-[9px] font-black uppercase text-gray-400">Umbral: {stockThreshold}u</span>
             )}
           </div>
           <div>
@@ -262,19 +267,19 @@ const Dashboard = () => {
         <div className="bg-gray-50 p-8 rounded-[3rem] border-2 border-[#6B7A3A]/20 animate-slide-up">
           <div className="flex justify-between items-center mb-8">
             <h3 className="font-black uppercase italic tracking-tighter">{activeView === 'sold' ? 'Ganancia por Variedad' : activeView === 'consumed' ? 'Detalle de Consumo' : activeView === 'lowStock' ? 'Variedades a Reponer' : 'Clientes Ausentes'}</h3>
-            <button onClick={() => setActiveView('none')} className="p-2 bg-white rounded-full"><X size={20}/></button>
+            <button onClick={() => setActiveView('none')} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeView === 'sold' && Object.values(analysis.soldMap).map((p: any, i) => (
               <div key={i} className="bg-white p-5 rounded-2xl flex justify-between items-center shadow-sm">
                 <div><p className="font-black text-sm uppercase">{p.name}</p><p className="text-[10px] text-gray-400 font-bold">{p.qty} unidades</p></div>
-                <p className="font-black text-[#6B7A3A]">+${p.profit.toLocaleString()}</p>
+                <p className="font-black text-[#6B7A3A] text-lg">+${p.profit.toLocaleString()}</p>
               </div>
             ))}
             {activeView === 'consumed' && Object.values(analysis.consumedMap).map((p: any, i) => (
               <div key={i} className="bg-white p-5 rounded-2xl flex justify-between items-center shadow-sm">
                 <p className="font-black text-sm uppercase">{p.name}</p>
-                <p className="font-black text-amber-600">{p.qty} u.</p>
+                <p className="font-black text-amber-600 text-lg">{p.qty} u.</p>
               </div>
             ))}
             {activeView === 'lowStock' && products.filter(p => p.stock <= stockThreshold).map((p, i) => (
@@ -293,14 +298,13 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* RANKINGS (RESTABLECIDOS) */}
+      {/* RANKINGS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top 5 Clientes */}
         <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-sm">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Users size={16} className="text-[#6B7A3A]"/> Top 5 Clientes</h3>
-            <button onClick={() => setActiveView('dormant')} className={`text-[9px] font-black uppercase px-3 py-1 rounded-full ${dormantCount > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-400'}`}>
-              <UserX size={12} className="inline mr-1"/> {dormantCount} Inactivos
+            <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">Top 5 Clientes</h3>
+            <button onClick={() => setActiveView('dormant')} className={`text-[9px] font-black uppercase px-3 py-1 rounded-full ${dormantClients.length > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-400'}`}>
+              {dormantClients.length} Inactivos
             </button>
           </div>
           <div className="space-y-3">
@@ -319,9 +323,8 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Top 5 Variedades */}
         <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-sm">
-          <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-8"><ShoppingBag size={16} className="text-[#6B7A3A]"/> Top 5 Variedades</h3>
+          <h3 className="text-xs font-black uppercase tracking-widest mb-8">Top 5 Variedades</h3>
           <div className="space-y-3">
             {topVarieties.map((p: any, i) => (
               <div key={i} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl group">
@@ -330,8 +333,8 @@ const Dashboard = () => {
                   <p className="font-black text-xs uppercase truncate w-32">{p.name}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-[#6B7A3A] text-sm">+${p.profit.toLocaleString()}</p>
-                  <p className="text-[8px] font-black uppercase text-gray-400 italic">Ganancia Neta</p>
+                  <p className="font-black text-[#6B7A3A] text-sm">+${(p.profit || 0).toLocaleString()}</p>
+                  <p className="text-[8px] font-black uppercase text-gray-400 italic">Ganancia</p>
                 </div>
               </div>
             ))}
@@ -339,15 +342,11 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* GRÁFICO COMPARATIVO ANUAL */}
+      {/* GRÁFICO COMPARATIVO */}
       <div className="bg-[#1C1C1C] p-8 md:p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-[#6B7A3A]/10 rounded-full blur-3xl" />
         <div className="relative z-10">
           <div className="flex justify-between items-center mb-12">
-            <div>
-              <h3 className="text-2xl font-black uppercase italic tracking-tighter">Comparativa de Ventas</h3>
-              <p className="text-[9px] font-black uppercase text-gray-500 tracking-[0.3em]">Cifras en Pesos Argentinos ($)</p>
-            </div>
+            <h3 className="text-2xl font-black uppercase italic tracking-tighter">Comparativa de Ventas Anual</h3>
             <div className="flex gap-4">
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#6B7A3A]"/> <span className="text-[10px] font-black uppercase">2026</span></div>
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-white/10"/> <span className="text-[10px] font-black uppercase">2025</span></div>
