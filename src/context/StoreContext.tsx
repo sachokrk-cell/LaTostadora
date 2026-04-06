@@ -1,161 +1,128 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { AppState, Product, Client, Sale, Purchase, Consumption, PaymentRecord } from '../types';
+import { AppState, Product, Client, Sale, Purchase, Consumption } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface StoreContextType extends AppState {
-  addProduct: (product: Product) => Promise<void>;
-  updateProduct: (product: Product) => Promise<void>;
+  addProduct: (p: Product) => Promise<void>;
+  updateProduct: (p: Product) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
-  addClient: (client: Client) => Promise<void>;
-  updateClient: (client: Client) => Promise<void>;
+  addClient: (c: Client) => Promise<void>;
+  updateClient: (c: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<void>;
-  addSale: (sale: Sale) => Promise<void>;
+  addSale: (s: Sale) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
-  addPaymentToSale: (saleId: string, payment: PaymentRecord) => Promise<void>;
-  addConsumption: (consumption: Consumption) => Promise<void>;
+  addPurchase: (p: Purchase) => Promise<void>;
+  addConsumption: (c: Consumption) => Promise<void>;
+  importData: (jsonData: string) => Promise<void>; // Esta es la clave
   monthlyGoal: number;
   stockThreshold: number;
-  updateGlobalSettings: (goal: number, threshold: number) => Promise<void>;
-  syncId: string | undefined;
-  pullFromLegacyCloud: (phrase: string) => Promise<void>;
+  updateGlobalSettings: (g: number, t: number) => Promise<void>;
   isLoading: boolean;
   refreshData: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-// --- MAPEADORES DE DATOS (JS <-> DB) ---
-const mapProdToDb = (p: any) => ({
-  id: p.id, name: p.name, description: p.description || '', category: p.category || 'Otros',
-  cost_price: p.costPrice || p.cost_price || 0, 
-  margin_percentage: p.marginPercentage || p.margin_percentage || 30,
-  selling_price: p.sellingPrice || p.selling_price || 0, 
-  stock: p.stock || 0, 
-  image_url: p.imageUrl || p.image_url || ''
-});
-
-const mapDbToProd = (p: any): Product => ({
-  id: p.id, name: p.name, description: p.description, category: p.category,
-  costPrice: p.cost_price, marginPercentage: p.margin_percentage,
-  sellingPrice: p.selling_price, stock: p.stock, imageUrl: p.image_url, history: []
-});
-
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [consumptions, setConsumptions] = useState<Consumption[]>([]);
   const [monthlyGoal, setMonthlyGoal] = useState(1000000);
   const [stockThreshold, setStockThreshold] = useState(10);
-  const [syncId] = useState(localStorage.getItem('lt_sync_phrase') || undefined);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- FUNCIÓN DE CARGA TOTAL ---
   const refreshData = async () => {
-    const [{ data: p }, { data: c }, { data: s }, { data: sett }] = await Promise.all([
-      supabase.from('products').select('*'),
-      supabase.from('clients').select('*'),
-      supabase.from('sales').select('*, items:sale_items(*)').order('date', { ascending: false }),
-      supabase.from('settings').select('*').eq('id', 'global_config').single()
-    ]);
-    if (p) setProducts(p.map(mapDbToProd));
-    if (c) setClients(c.map(cl => ({ ...cl, totalSpent: cl.total_spent })));
-    if (s) setSales(s.map(sale => ({
-      ...sale, clientId: sale.client_id, clientName: sale.client_name, amountPaid: sale.amount_paid,
-      items: sale.items.map((i: any) => ({ ...i, appliedPrice: i.applied_price }))
-    })));
-    if (sett) { setMonthlyGoal(sett.monthly_goal); setStockThreshold(sett.stock_threshold); }
-    setIsLoading(false);
+    try {
+      const [p, c, s, pur, cons, sett] = await Promise.all([
+        supabase.from('products').select('*').order('name'),
+        supabase.from('clients').select('*').order('name'),
+        supabase.from('sales').select('*, items:sale_items(*)').order('date', { ascending: false }),
+        supabase.from('purchases').select('*').order('date', { ascending: false }),
+        supabase.from('consumptions').select('*').order('date', { ascending: false }),
+        supabase.from('settings').select('*').eq('id', 'global_config').maybeSingle()
+      ]);
+
+      if (p.data) setProducts(p.data.map((x: any) => ({ ...x, costPrice: x.cost_price, marginPercentage: x.margin_percentage, sellingPrice: x.selling_price, imageUrl: x.image_url })));
+      if (c.data) setClients(c.data.map((x: any) => ({ ...x, totalSpent: x.total_spent })));
+      if (s.data) setSales(s.data.map((x: any) => ({ ...x, clientId: x.client_id, clientName: x.client_name, amountPaid: x.amount_paid, items: x.items.map((i: any) => ({ ...i, appliedPrice: i.applied_price })) })));
+      if (pur.data) setPurchases(pur.data.map((x: any) => ({ ...x, productName: x.product_name, unitCost: x.unit_cost, totalCost: x.total_cost })));
+      if (cons.data) setConsumptions(cons.data.map((x: any) => ({ ...x, productName: x.product_name })));
+      if (sett.data) { setMonthlyGoal(sett.data.monthly_goal); setStockThreshold(sett.data.stock_threshold); }
+    } finally { setIsLoading(false); }
   };
 
-  // --- ¡TIEMPO REAL ACTIVADO! ---
   useEffect(() => {
     refreshData();
-    // Escuchar cambios en la DB para actualizar todos los dispositivos en línea
-    const channel = supabase.channel('realtime_changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const sub = supabase.channel('la_tostadora').on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData()).subscribe();
+    return () => { supabase.removeChannel(sub); };
   }, []);
 
-  // --- FUNCIÓN DE RESCATE (MIGRAR GWLFLL) ---
-  const pullFromLegacyCloud = async (phrase: string) => {
+  const importData = async (jsonData: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.from('coffee_sync').select('data').eq('id', phrase.toUpperCase()).single();
-      if (error || !data) throw new Error("Clave no encontrada en el sistema viejo");
-
-      const legacy = data.data;
-
-      // 1. Migrar Productos
-      if (legacy.products?.length) {
-        await supabase.from('products').upsert(legacy.products.map(mapProdToDb));
+      const data = JSON.parse(jsonData);
+      
+      // MIGRACIÓN POR BLOQUES (Para evitar que Supabase se queje por tamaño)
+      if (data.products) {
+        for (const p of data.products) {
+          await supabase.from('products').upsert({
+            id: p.id, name: p.name, description: p.description, category: p.category,
+            cost_price: p.costPrice, margin_percentage: p.marginPercentage,
+            selling_price: p.sellingPrice, stock: p.stock, image_url: p.imageUrl
+          });
+        }
       }
-      // 2. Migrar Clientes
-      if (legacy.clients?.length) {
-        await supabase.from('clients').upsert(legacy.clients.map((cl: any) => ({
-          id: cl.id, name: cl.name, email: cl.email, phone: cl.phone, notes: cl.notes, total_spent: cl.totalSpent
+
+      if (data.clients) {
+        await supabase.from('clients').upsert(data.clients.map((c: any) => ({
+          id: c.id, name: c.name, email: c.email, phone: c.phone, notes: c.notes, total_spent: c.totalSpent
         })));
       }
-      // 3. Migrar Ventas (con sus items)
-      if (legacy.sales?.length) {
-        for (const s of legacy.sales) {
+
+      if (data.sales) {
+        for (const s of data.sales) {
           await supabase.from('sales').upsert({
             id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date,
-            total: s.total, payment_method: s.paymentMethod, amount_paid: s.amountPaid, balance: s.balance
+            total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod
           });
-          if (s.items?.length) {
+          if (s.items) {
             await supabase.from('sale_items').upsert(s.items.map((i: any) => ({
               sale_id: s.id, product_id: i.id, name: i.name, quantity: i.quantity, applied_price: i.appliedPrice
             })));
           }
         }
       }
-      
-      localStorage.setItem('lt_sync_phrase', phrase.toUpperCase());
+
       await refreshData();
-      alert("¡Datos recuperados con éxito! Ahora todo está sincronizado en tiempo real.");
-    } catch (e: any) {
-      alert("Error: " + e.message);
+      alert("¡Backup restaurado con éxito en la nube!");
+    } catch (e) {
+      console.error(e);
+      alert("Error al procesar el archivo de backup.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- FUNCIONES DE ACCIÓN ---
-  const addSale = async (s: Sale) => {
-    const { error: saleErr } = await supabase.from('sales').insert([{
-      id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date,
-      total: s.total, payment_method: s.paymentMethod, amount_paid: s.amountPaid, balance: s.balance
-    }]);
-    if (!saleErr) {
-      await supabase.from('sale_items').insert(s.items.map(i => ({
-        sale_id: s.id, product_id: i.id, name: i.name, quantity: i.quantity, applied_price: i.appliedPrice
-      })));
-      // El stock se actualiza solo porque refreshData() se dispara por el Realtime
-    }
-  };
-
   return (
     <StoreContext.Provider value={{ 
-      products, clients, sales, purchases: [], consumptions: [],
-      addProduct: async (p) => { await supabase.from('products').insert([mapProdToDb(p)]); },
-      updateProduct: async (p) => { await supabase.from('products').update(mapProdToDb(p)).eq('id', p.id); },
+      products, clients, sales, purchases, consumptions, isLoading, monthlyGoal, stockThreshold,
+      addProduct: async (p) => { await supabase.from('products').insert([{ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }]); },
+      updateProduct: async (p) => { await supabase.from('products').update({ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }).eq('id', p.id); },
       deleteProduct: async (id) => { await supabase.from('products').delete().eq('id', id); },
       addClient: async (c) => { await supabase.from('clients').insert([{ ...c, total_spent: c.totalSpent }]); },
       updateClient: async (c) => { await supabase.from('clients').update({ ...c, total_spent: c.totalSpent }).eq('id', c.id); },
       deleteClient: async (id) => { await supabase.from('clients').delete().eq('id', id); },
-      addSale,
-      deleteSale: async (id) => { await supabase.from('sales').delete().eq('id', id); },
-      addPaymentToSale: async (id, pay) => { 
-        const s = sales.find(x => x.id === id);
-        if(s) await supabase.from('sales').update({ amount_paid: s.amountPaid + pay.amount, balance: s.balance - pay.amount }).eq('id', id);
+      addSale: async (s) => {
+        await supabase.from('sales').insert([{ id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date, total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod }]);
+        await supabase.from('sale_items').insert(s.items.map(i => ({ sale_id: s.id, product_id: i.id, name: i.name, quantity: i.quantity, applied_price: i.appliedPrice })));
       },
-      addConsumption: async (c) => { await supabase.from('consumptions').insert([{ ...c, product_id: c.productId, product_name: c.productName }]); },
-      addPurchase: async (p) => { /* Lógica similar */ },
-      updatePurchase: async (p) => {}, deletePurchase: async (id) => {},
-      monthlyGoal, stockThreshold, 
-      updateGlobalSettings: async (g, t) => { await supabase.from('settings').upsert({id: 'global_config', monthly_goal: g, stock_threshold: t}); },
-      syncId, pullFromLegacyCloud, isLoading, refreshData
+      deleteSale: async (id) => { await supabase.from('sales').delete().eq('id', id); },
+      addPurchase: async (p) => { await supabase.from('purchases').insert([{ ...p, product_name: p.productName, unit_cost: p.unitCost, total_cost: p.totalCost }]); },
+      addConsumption: async (c) => { await supabase.from('consumptions').insert([{ ...c, product_name: c.productName }]); },
+      updateGlobalSettings: async (g, t) => { await supabase.from('settings').upsert({ id: 'global_config', monthly_goal: g, stock_threshold: t }); },
+      importData, refreshData
     }}>
       {children}
     </StoreContext.Provider>
@@ -164,6 +131,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 export const useStore = () => {
   const context = useContext(StoreContext);
-  if (!context) throw new Error('useStore debe usarse dentro de StoreProvider');
+  if (!context) throw new Error('useStore error');
   return context;
 };
