@@ -1,10 +1,23 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
-import { Plus, Search, Edit2, Trash2, ArrowDownCircle, Coffee, Upload, Image as ImageIcon, AlertTriangle, X, ZoomIn, ArrowUpDown, Package, DollarSign, TrendingUp, ArrowLeft } from 'lucide-react';
+import { 
+  Plus, Search, Edit2, Trash2, ArrowDownCircle, Coffee, 
+  Upload, Image as ImageIcon, AlertTriangle, X, 
+  ArrowLeft 
+} from 'lucide-react';
 
 const Inventory = () => {
-  const { products, addProduct, updateProduct, deleteProduct, addPurchase, addConsumption } = useStore();
+  // Obtenemos stockThreshold desde el Store (Supabase) en lugar de localStorage
+  const { 
+    products, 
+    addProduct, 
+    updateProduct, 
+    deleteProduct, 
+    addPurchase, 
+    addConsumption, 
+    stockThreshold 
+  } = useStore();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'stock_asc' | 'stock_desc'>('name');
@@ -20,7 +33,6 @@ const Inventory = () => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const stockThreshold = Number(localStorage.getItem('coffeemaster_stock_threshold')) || 10;
 
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '', category: 'Grano', costPrice: 0, marginPercentage: 30, sellingPrice: 0, stock: 0, description: '', imageUrl: ''
@@ -178,7 +190,7 @@ const Inventory = () => {
         ))}
       </div>
 
-      {/* MODAL: NUEVO / EDITAR PRODUCTO (SOLUCIÓN PANTALLA COMPLETA) */}
+      {/* MODAL: NUEVO / EDITAR PRODUCTO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#1C1C1C] z-[200] flex flex-col animate-slide-up sm:bg-[#1C1C1C]/90 sm:p-4 sm:items-center sm:justify-center">
           <div className="bg-white w-full h-full sm:h-auto sm:max-w-2xl sm:rounded-[3rem] flex flex-col overflow-hidden">
