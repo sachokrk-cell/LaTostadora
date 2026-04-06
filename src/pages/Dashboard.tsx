@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { 
   TrendingUp, Target, Users, Package, AlertTriangle, 
   Coffee, ChevronRight, ArrowUpRight, Calendar, 
-  Filter, DollarSign, Info, UserX, ShoppingBag, ArrowDown
+  DollarSign, Info, UserX, ShoppingBag, X, Check, Edit3
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, BarChart, Bar, Legend, Cell, PieChart, Pie
+  ResponsiveContainer
 } from 'recharts';
 
 const Dashboard = () => {
@@ -16,371 +16,273 @@ const Dashboard = () => {
     monthlyGoal, stockThreshold, updateGlobalSettings, isLoading 
   } = useStore();
 
-  // ESTADOS PARA INTERACTIVIDAD
+  // ESTADOS
   const [activeView, setActiveView] = useState<'none' | 'sold' | 'consumed' | 'lowStock' | 'dormant'>('none');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [isEditingSettings, setIsEditingSettings] = useState(false);
-  const [tempSettings, setTempSettings] = useState({ goal: monthlyGoal, threshold: stockThreshold });
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoal, setTempGoal] = useState(monthlyGoal);
+  const [tempThreshold, setTempThreshold] = useState(stockThreshold);
 
-  // --- LÓGICA DE FILTRADO Y TIEMPOS ---
-  const now = new Date();
-  
-  const getTotals = (filteredSales: any[]) => filteredSales.reduce((acc, s) => acc + s.total, 0);
+  // Sincronizar configuraciones locales con el contexto
+  useEffect(() => {
+    setTempGoal(monthlyGoal);
+    setTempThreshold(stockThreshold);
+  }, [monthlyGoal, stockThreshold]);
 
-  const metrics = useMemo(() => {
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
+  // --- 1. FILTRADO DE DATOS ---
+  const filteredData = useMemo(() => {
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, 1).toISOString().split('T')[0];
+    const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
 
-    const fSales = sales.filter(s => {
-      const d = new Date(s.date);
-      const matchesStart = dateRange.start ? d >= new Date(dateRange.start) : true;
-      const matchesEnd = dateRange.end ? d <= new Date(dateRange.end) : true;
+    const filterByRange = (list: any[]) => list.filter(item => {
+      const itemDate = item.date.split('T')[0];
+      const matchesStart = dateRange.start ? itemDate >= dateRange.start : true;
+      const matchesEnd = dateRange.end ? itemDate <= dateRange.end : true;
       return matchesStart && matchesEnd;
     });
 
+    const fSales = filterByRange(sales);
+    const fConsumptions = filterByRange(consumptions);
+
     return {
-      currentMonth: getTotals(sales.filter(s => new Date(s.date) >= startOfMonth)),
-      last3Months: getTotals(sales.filter(s => new Date(s.date) >= threeMonthsAgo)),
-      currentYear: getTotals(sales.filter(s => new Date(s.date) >= startOfYear)),
-      allTime: getTotals(sales),
-      filtered: getTotals(fSales),
-      filteredSales: fSales
+      sales: fSales,
+      consumptions: fConsumptions,
+      currentMonthRev: sales.filter(s => s.date.split('T')[0] >= startOfMonth).reduce((acc, s) => acc + s.total, 0),
+      last3MonthsRev: sales.filter(s => s.date.split('T')[0] >= threeMonthsAgo).reduce((acc, s) => acc + s.total, 0),
+      currentYearRev: sales.filter(s => s.date.split('T')[0] >= startOfYear).reduce((acc, s) => acc + s.total, 0),
+      allTimeRev: sales.reduce((acc, s) => acc + s.total, 0),
+      totalFilteredRev: fSales.reduce((acc, s) => acc + s.total, 0)
     };
-  }, [sales, dateRange]);
+  }, [sales, consumptions, dateRange]);
 
-  // --- RENTABILIDAD Y UNIDADES ---
+  // --- 2. ANÁLISIS DE UNIDADES Y RENTABILIDAD ---
   const analysis = useMemo(() => {
-    const soldBreakdown: Record<string, any> = {};
-    const consumedBreakdown: Record<string, any> = {};
-    let totalUnitsSold = 0;
-    let totalUnitsConsumed = 0;
+    const soldItems: Record<string, any> = {};
+    const consumedItems: Record<string, any> = {};
     let totalProfit = 0;
+    let unitsSold = 0;
+    let unitsConsumed = 0;
 
-    // Ventas
-    metrics.filteredSales.forEach(s => {
-      s.items.forEach((item: any) => {
-        totalUnitsSold += item.quantity;
-        const prod = products.find(p => p.id === item.id);
+    filteredData.sales.forEach(sale => {
+      sale.items?.forEach((item: any) => {
+        unitsSold += item.quantity;
+        const prod = products.find(p => p.id === item.id || p.id === item.product_id);
         const cost = prod ? prod.costPrice : 0;
         const profit = (item.appliedPrice - cost) * item.quantity;
         totalProfit += profit;
 
-        if (!soldBreakdown[item.id]) soldBreakdown[item.id] = { name: item.name, qty: 0, profit: 0 };
-        soldBreakdown[item.id].qty += item.quantity;
-        soldBreakdown[item.id].profit += profit;
+        const id = item.id || item.product_id;
+        if (!soldItems[id]) soldItems[id] = { name: item.name, qty: 0, profit: 0 };
+        soldItems[id].qty += item.quantity;
+        soldItems[id].profit += profit;
       });
     });
 
-    // Consumos
-    consumptions.forEach(c => {
-      totalUnitsConsumed += c.quantity;
-      if (!consumedBreakdown[c.productId]) consumedBreakdown[c.productId] = { name: c.productName, qty: 0 };
-      consumedBreakdown[c.productId].qty += c.quantity;
+    filteredData.consumptions.forEach(c => {
+      unitsConsumed += c.quantity;
+      const id = c.productId || c.product_id;
+      if (!consumedItems[id]) consumedItems[id] = { name: c.productName || c.name, qty: 0 };
+      consumedItems[id].qty += c.quantity;
     });
 
-    return { totalUnitsSold, totalUnitsConsumed, totalProfit, soldBreakdown, consumedBreakdown };
-  }, [metrics.filteredSales, consumptions, products]);
+    return { unitsSold, unitsConsumed, totalProfit, soldItems, consumedItems };
+  }, [filteredData, products]);
 
-  // --- CLIENTES DORMIDOS (> 45 DÍAS) ---
+  // --- 3. CLIENTES DORMIDOS Y STOCK ---
   const dormantClients = useMemo(() => {
+    const fortyFiveDaysAgo = new Date();
+    fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
+    
     return clients.filter(client => {
       const clientSales = sales.filter(s => s.clientId === client.id);
       if (clientSales.length === 0) return true;
-      const lastSale = new Date(Math.max(...clientSales.map(s => new Date(s.date).getTime())));
-      const diffDays = Math.floor((now.getTime() - lastSale.getTime()) / (1000 * 60 * 60 * 24));
-      return diffDays > 45;
+      const lastSaleDate = new Date(Math.max(...clientSales.map(s => new Date(s.date).getTime())));
+      return lastSaleDate < fortyFiveDaysAgo;
     });
   }, [clients, sales]);
 
-  // --- TOP RANKINGS ---
-  const topClients = useMemo(() => {
-    return clients.map(c => {
-      const cSales = sales.filter(s => s.clientId === c.id);
-      const total = cSales.reduce((acc, s) => acc + s.total, 0);
-      const varieties: Record<string, number> = {};
-      cSales.forEach(s => s.items.forEach((i: any) => {
-        varieties[i.name] = (varieties[i.name] || 0) + i.quantity;
-      }));
-      const fav = Object.entries(varieties).sort((a,b) => b[1] - a[1])[0]?.[0] || 'N/A';
-      return { ...c, totalSpent: total, favorite: fav };
-    }).sort((a,b) => b.totalSpent - a.totalSpent).slice(0, 5);
-  }, [clients, sales]);
+  const lowStockProducts = products.filter(p => p.stock <= stockThreshold);
 
-  // --- GRÁFICO COMPARATIVO ANUAL ---
-  const comparisonData = useMemo(() => {
-    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    return months.map((m, i) => {
-      const currentYearSales = sales.filter(s => {
-        const d = new Date(s.date);
-        return d.getMonth() === i && d.getFullYear() === now.getFullYear();
-      }).reduce((acc, s) => acc + s.total, 0);
+  // --- 4. TOP RANKINGS ---
+  const topVarieties = Object.values(analysis.soldItems)
+    .sort((a: any, b: any) => b.qty - a.qty)
+    .slice(0, 5);
 
-      const lastYearSales = sales.filter(s => {
-        const d = new Date(s.date);
-        return d.getMonth() === i && d.getFullYear() === now.getFullYear() - 1;
-      }).reduce((acc, s) => acc + s.total, 0);
+  const topClients = clients.map(c => {
+    const cSales = sales.filter(s => s.clientId === c.id);
+    const spent = cSales.reduce((acc, s) => acc + s.total, 0);
+    const varietyCounts: any = {};
+    cSales.forEach(s => s.items?.forEach((i: any) => varietyCounts[i.name] = (varietyCounts[i.name] || 0) + i.quantity));
+    const fav = Object.entries(varietyCounts).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '---';
+    return { ...c, spent, fav };
+  }).sort((a, b) => b.spent - a.spent).slice(0, 5);
 
-      return { name: m, actual: currentYearSales, anterior: lastYearSales };
-    });
-  }, [sales]);
-
-  const handleSaveSettings = () => {
-    updateGlobalSettings(tempSettings.goal, tempSettings.threshold);
-    setIsEditingSettings(false);
+  // --- ACCIONES ---
+  const handleUpdateSettings = async () => {
+    await updateGlobalSettings(tempGoal, tempThreshold);
+    setIsEditingGoal(false);
   };
+
+  if (isLoading) return <div className="p-20 text-center font-black animate-pulse">CARGANDO DATOS...</div>;
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-white min-h-screen pb-32 text-[#1C1C1C]">
       
-      {/* 1. HEADER & FILTROS */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-        <div>
-          <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Dashboard</h2>
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#6B7A3A] mt-2">La Tostadora v3.0</p>
-        </div>
-
-        <div className="flex flex-wrap gap-3 bg-gray-50 p-3 rounded-[2.5rem] border-2 border-gray-100 shadow-sm w-full lg:w-auto">
-          <div className="flex items-center gap-2 px-4">
-            <Calendar size={16} className="text-gray-400" />
-            <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="bg-transparent text-[10px] font-black outline-none uppercase" />
-            <span className="text-gray-300">/</span>
-            <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="bg-transparent text-[10px] font-black outline-none uppercase" />
-          </div>
+      {/* HEADER Y FILTROS */}
+      <div className="flex flex-col lg:flex-row justify-between gap-6">
+        <h2 className="text-4xl font-black uppercase italic tracking-tighter">La Tostadora <span className="text-[#6B7A3A]">Dashboard</span></h2>
+        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-3xl border-2 border-gray-100">
+          <Calendar size={18} className="ml-2 text-gray-400" />
+          <input type="date" className="bg-transparent font-bold text-xs p-2 outline-none" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} />
+          <span className="text-gray-300">/</span>
+          <input type="date" className="bg-transparent font-bold text-xs p-2 outline-none" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} />
           {(dateRange.start || dateRange.end) && (
-            <button onClick={() => setDateRange({start:'', end:''})} className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-all"><X size={14}/></button>
+            <button onClick={() => setDateRange({start: '', end: ''})} className="p-2 text-red-500"><X size={16}/></button>
           )}
         </div>
       </div>
 
-      {/* 2. RECUADROS DE VENTAS (4 PERIODOS) */}
+      {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Mes Actual', value: metrics.currentMonth, icon: <Coffee size={20}/> },
-          { label: 'Últimos 3 Meses', value: metrics.last3Months, icon: <TrendingUp size={20}/> },
-          { label: 'Año actual', value: metrics.currentYear, icon: <ShoppingBag size={20}/> },
-          { label: 'Total Histórico', value: metrics.allTime, icon: <DollarSign size={20}/> }
-        ].map((item, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm hover:border-[#6B7A3A] transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-gray-50 rounded-2xl group-hover:bg-[#6B7A3A] group-hover:text-white transition-all">{item.icon}</div>
-              <ArrowUpRight size={16} className="text-[#6B7A3A]" />
-            </div>
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{item.label}</p>
-            <p className="text-3xl font-black tracking-tighter mt-1">${item.value.toLocaleString()}</p>
+          { label: 'Mes Actual', value: filteredData.currentMonthRev, icon: <Coffee /> },
+          { label: '3 Meses', value: filteredData.last3MonthsRev, icon: <TrendingUp /> },
+          { label: 'Año actual', value: filteredData.currentYearRev, icon: <ShoppingBag /> },
+          { label: 'Histórico', value: filteredData.allTimeRev, icon: <DollarSign /> },
+        ].map((kpi, i) => (
+          <div key={i} className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm">
+            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">{kpi.label}</p>
+            <p className="text-2xl font-black">${kpi.value.toLocaleString()}</p>
           </div>
         ))}
       </div>
 
-      {/* 3. OBJETIVO Y ALERTAS */}
+      {/* OBJETIVO Y STOCK CONFIG */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Barra de Objetivos */}
-        <div className="lg:col-span-2 bg-[#1C1C1C] p-8 rounded-[3rem] text-white relative overflow-hidden">
+        <div className="lg:col-span-2 bg-[#1C1C1C] p-8 rounded-[3rem] text-white">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#6B7A3A]">Objetivo de Venta Mensual</h3>
-            <button onClick={() => setIsEditingSettings(!isEditingSettings)} className="text-[10px] font-black uppercase bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-all">Configurar</button>
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#6B7A3A]">Objetivo Mensual</h3>
+            <button onClick={() => setIsEditingGoal(!isEditingGoal)} className="p-2 hover:bg-white/10 rounded-full"><Edit3 size={16}/></button>
           </div>
-          
-          {isEditingSettings ? (
-            <div className="flex items-center gap-4 mb-6 animate-fade-in">
-              <input type="number" value={tempSettings.goal} onChange={e => setTempSettings({...tempSettings, goal: Number(e.target.value)})} className="bg-white/10 border-2 border-[#6B7A3A] p-3 rounded-2xl text-xl font-black w-40 outline-none" />
-              <button onClick={handleSaveSettings} className="bg-[#6B7A3A] text-white px-6 py-3 rounded-2xl font-black uppercase text-xs">Guardar</button>
+          {isEditingGoal ? (
+            <div className="flex gap-4 mb-4">
+              <input type="number" className="bg-white/10 border border-[#6B7A3A] p-2 rounded-xl text-white font-black" value={tempGoal} onChange={e => setTempGoal(Number(e.target.value))} />
+              <button onClick={handleUpdateSettings} className="bg-[#6B7A3A] p-2 rounded-xl"><Check size={20}/></button>
             </div>
           ) : (
-            <div className="flex items-baseline gap-2 mb-6">
-              <span className="text-5xl font-black italic tracking-tighter">${metrics.currentMonth.toLocaleString()}</span>
-              <span className="text-gray-500 font-bold">/ ${monthlyGoal.toLocaleString()}</span>
-            </div>
+            <p className="text-4xl font-black italic mb-4">${filteredData.currentMonthRev.toLocaleString()} <span className="text-lg text-gray-500 font-normal">/ ${monthlyGoal.toLocaleString()}</span></p>
           )}
-
-          <div className="relative h-6 bg-white/5 rounded-full overflow-hidden border border-white/10">
-            <div 
-              className="absolute top-0 left-0 h-full bg-[#6B7A3A] transition-all duration-1000 flex items-center justify-end pr-2 shadow-[0_0_20px_rgba(107,122,58,0.5)]" 
-              style={{ width: `${Math.min((metrics.currentMonth/monthlyGoal)*100, 100)}%` }}
-            >
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            </div>
+          <div className="h-4 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-full bg-[#6B7A3A] transition-all duration-1000" style={{ width: `${Math.min((filteredData.currentMonthRev/monthlyGoal)*100, 100)}%` }}></div>
           </div>
-          <p className="text-[10px] font-black uppercase text-gray-500 mt-4 tracking-widest">Progreso: {((metrics.currentMonth/monthlyGoal)*100).toFixed(1)}%</p>
         </div>
 
-        {/* Alerta de Stock Bajo Interactiva */}
-        <div 
-          onClick={() => setActiveView(activeView === 'lowStock' ? 'none' : 'lowStock')}
-          className={`p-8 rounded-[3rem] border-2 cursor-pointer transition-all ${products.filter(p => p.stock <= stockThreshold).length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100 opacity-50'}`}
-        >
-          <div className="flex justify-between items-center mb-6">
-            <AlertTriangle className={products.filter(p => p.stock <= stockThreshold).length > 0 ? 'text-red-600 animate-bounce' : 'text-gray-400'} />
-            <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Config: {stockThreshold}u</span>
+        <div onClick={() => setActiveView(activeView === 'lowStock' ? 'none' : 'lowStock')} className={`p-8 rounded-[3rem] border-2 cursor-pointer transition-all ${lowStockProducts.length > 0 ? 'bg-red-50 border-red-200 animate-pulse' : 'bg-gray-50'}`}>
+          <div className="flex justify-between items-center mb-4">
+            <AlertTriangle className={lowStockProducts.length > 0 ? 'text-red-600' : 'text-gray-300'} />
+            {isEditingGoal ? (
+              <input type="number" className="w-16 bg-white p-1 rounded-lg text-xs font-black border border-red-200" value={tempThreshold} onChange={e => setTempThreshold(Number(e.target.value))} />
+            ) : (
+              <span className="text-[10px] font-black uppercase text-gray-400">Umbral: {stockThreshold}u</span>
+            )}
           </div>
-          <h3 className="text-xs font-black uppercase tracking-widest text-red-600 mb-2">Stock Crítico</h3>
-          <p className="text-5xl font-black tracking-tighter text-[#1C1C1C]">{products.filter(p => p.stock <= stockThreshold).length}</p>
-          <div className="mt-4 flex items-center gap-1 text-[10px] font-black uppercase text-red-600">
-            Ver detalles <ChevronRight size={12}/>
-          </div>
+          <p className="text-xs font-black uppercase tracking-widest text-red-600">Stock Crítico</p>
+          <p className="text-5xl font-black">{lowStockProducts.length}</p>
         </div>
       </div>
 
-      {/* 4. COMPARATIVA VENDIDO VS CONSUMIDO */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <button 
-          onClick={() => setActiveView(activeView === 'sold' ? 'none' : 'sold')}
-          className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex items-center justify-between hover:shadow-xl transition-all"
-        >
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-[#6B7A3A]/10 text-[#6B7A3A] rounded-[1.5rem] flex items-center justify-center"><ShoppingBag size={32}/></div>
-            <div className="text-left">
-              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Unidades Vendidas</p>
-              <p className="text-4xl font-black italic tracking-tighter">{analysis.totalUnitsSold} u.</p>
-            </div>
+      {/* VENDIDO VS CONSUMIDO (BOTONES) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <button onClick={() => setActiveView(activeView === 'sold' ? 'none' : 'sold')} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex justify-between items-center hover:shadow-xl transition-all">
+          <div className="text-left">
+            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Unidades Vendidas</p>
+            <p className="text-4xl font-black italic">{analysis.unitsSold} u.</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-black uppercase text-[#6B7A3A]">Rentabilidad</p>
-            <p className="text-2xl font-black tracking-tighter text-[#6B7A3A]">+${analysis.totalProfit.toLocaleString()}</p>
+            <p className="text-2xl font-black text-[#6B7A3A]">+${analysis.totalProfit.toLocaleString()}</p>
           </div>
         </button>
 
-        <button 
-          onClick={() => setActiveView(activeView === 'consumed' ? 'none' : 'consumed')}
-          className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex items-center justify-between hover:shadow-xl transition-all"
-        >
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-[1.5rem] flex items-center justify-center"><Coffee size={32}/></div>
-            <div className="text-left">
-              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Consumo Propio</p>
-              <p className="text-4xl font-black italic tracking-tighter">{analysis.totalUnitsConsumed} u.</p>
-            </div>
+        <button onClick={() => setActiveView(activeView === 'consumed' ? 'none' : 'consumed')} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 flex justify-between items-center hover:shadow-xl transition-all">
+          <div className="text-left">
+            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Consumo Propio</p>
+            <p className="text-4xl font-black italic">{analysis.unitsConsumed} u.</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest italic">Costo Interno</p>
-            <Info size={20} className="text-amber-200 ml-auto" />
-          </div>
+          <Info className="text-amber-500" size={32} />
         </button>
       </div>
 
-      {/* 5. MODALES INTERACTIVOS (DESGLOSES) */}
+      {/* PANEL INTERACTIVO DE DETALLES */}
       {activeView !== 'none' && (
-        <div className="bg-gray-50 rounded-[3rem] p-8 border-2 border-[#6B7A3A]/20 animate-slide-up">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3">
-              {activeView === 'sold' && 'Desglose de Ventas y Ganancia'}
-              {activeView === 'consumed' && 'Detalle de Consumo Interno'}
-              {activeView === 'lowStock' && 'Variedades con Stock Crítico'}
-              {activeView === 'dormant' && 'Clientes Ausentes (>45 días)'}
-            </h3>
-            <button onClick={() => setActiveView('none')} className="p-2 bg-white rounded-full shadow-sm hover:scale-110 transition-all"><X size={20}/></button>
+        <div className="bg-gray-50 p-8 rounded-[3rem] border-2 border-[#6B7A3A]/20 animate-slide-up">
+          <div className="flex justify-between mb-6">
+            <h3 className="font-black uppercase italic">{activeView === 'sold' ? 'Detalle de Rentabilidad' : activeView === 'consumed' ? 'Detalle de Consumos' : activeView === 'lowStock' ? 'Variedades a Reponer' : 'Clientes Ausentes'}</h3>
+            <button onClick={() => setActiveView('none')}><X /></button>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeView === 'sold' && Object.values(analysis.soldBreakdown).map((p: any, i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border-2 border-gray-100 flex justify-between items-center">
-                <div>
-                  <p className="font-black uppercase text-sm">{p.name}</p>
-                  <p className="text-[10px] font-bold text-gray-400">{p.qty} unidades</p>
-                </div>
-                <p className="font-black text-[#6B7A3A] text-lg">+${p.profit.toLocaleString()}</p>
+            {activeView === 'sold' && Object.values(analysis.soldItems).map((p: any, i) => (
+              <div key={i} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm">
+                <div><p className="font-black text-sm uppercase">{p.name}</p><p className="text-[10px] text-gray-400 font-bold">{p.qty} unidades</p></div>
+                <p className="font-black text-[#6B7A3A]">+${p.profit.toLocaleString()}</p>
               </div>
             ))}
-            {activeView === 'consumed' && Object.values(analysis.consumedBreakdown).map((p: any, i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border-2 border-gray-100 flex justify-between items-center">
-                <p className="font-black uppercase text-sm">{p.name}</p>
-                <p className="font-black text-amber-600 text-lg">{p.qty} u.</p>
+            {activeView === 'consumed' && Object.values(analysis.consumedItems).map((p: any, i) => (
+              <div key={i} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm">
+                <p className="font-black text-sm uppercase">{p.name}</p>
+                <p className="font-black text-amber-600">{p.qty} u.</p>
               </div>
             ))}
-            {activeView === 'lowStock' && products.filter(p => p.stock <= stockThreshold).map((p, i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border-2 border-red-100 flex justify-between items-center">
-                <p className="font-black uppercase text-sm">{p.name}</p>
-                <p className="font-black text-red-600 text-lg">{p.stock} disp.</p>
+            {activeView === 'lowStock' && lowStockProducts.map((p, i) => (
+              <div key={i} className="bg-white p-4 rounded-2xl flex justify-between items-center border border-red-100">
+                <p className="font-black text-sm uppercase">{p.name}</p>
+                <p className="font-black text-red-600">{p.stock} u.</p>
+              </div>
+            ))}
+            {activeView === 'dormant' && dormantClients.map((c, i) => (
+              <div key={i} className="bg-white p-4 rounded-2xl shadow-sm">
+                <p className="font-black text-sm uppercase">{c.name}</p>
+                <p className="text-[9px] font-bold text-red-500 uppercase">Sin compras hace +45 días</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 6. RANKINGS (CLIENTES Y VARIEDADES) */}
+      {/* RANKINGS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Clientes */}
-        <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-sm relative overflow-hidden">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Users size={16} className="text-[#6B7A3A]"/> Top 5 Clientes</h3>
-            <button 
-              onClick={() => setActiveView('dormant')}
-              className={`text-[9px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 ${dormantClients.length > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-400'}`}
-            >
-              <UserX size={12}/> {dormantClients.length} Inactivos
-            </button>
+        <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Users size={16}/> Top 5 Clientes</h3>
+            <button onClick={() => setActiveView('dormant')} className="text-[9px] font-black bg-red-50 text-red-600 px-3 py-1 rounded-full">{dormantClients.length} Inactivos</button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {topClients.map((c, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all group">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[#1C1C1C] text-white flex items-center justify-center font-black text-xs">{i+1}</div>
-                  <div>
-                    <p className="font-black uppercase text-xs truncate w-32">{c.name}</p>
-                    <p className="text-[9px] font-bold text-[#6B7A3A] uppercase">Prefiere: {c.favorite}</p>
-                  </div>
+              <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 bg-[#1C1C1C] text-white rounded-full flex items-center justify-center text-[10px] font-black">{i+1}</span>
+                  <div><p className="font-black text-xs uppercase">{c.name}</p><p className="text-[8px] font-bold text-[#6B7A3A] uppercase">Prefiere: {c.fav}</p></div>
                 </div>
-                <p className="font-black text-[#1C1C1C]">${c.totalSpent.toLocaleString()}</p>
+                <p className="font-black text-sm">${c.spent.toLocaleString()}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Top Variedades y Rentabilidad */}
-        <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-sm">
-          <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-8"><ShoppingBag size={16} className="text-[#6B7A3A]"/> Top 5 Variedades</h3>
-          <div className="space-y-4">
-            {Object.values(analysis.soldBreakdown).sort((a,b) => b.qty - a.qty).slice(0, 5).map((p: any, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl group">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[#6B7A3A] text-white flex items-center justify-center font-black text-xs">{p.qty}</div>
-                  <p className="font-black uppercase text-xs truncate w-32">{p.name}</p>
+        <div className="bg-white p-8 rounded-[3rem] border-2 border-gray-100">
+          <h3 className="text-xs font-black uppercase tracking-widest mb-6">Top 5 Variedades</h3>
+          <div className="space-y-3">
+            {topVarieties.map((p: any, i) => (
+              <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 bg-[#6B7A3A] text-white rounded-lg flex items-center justify-center text-[10px] font-black">{p.qty}</span>
+                  <p className="font-black text-xs uppercase">{p.name}</p>
                 </div>
-                <div className="text-right">
-                   <p className="font-black text-[#6B7A3A] text-sm">+${p.profit.toLocaleString()}</p>
-                   <p className="text-[8px] font-black uppercase text-gray-400 italic">Neto</p>
-                </div>
+                <p className="font-black text-sm text-[#6B7A3A]">+${p.profit.toLocaleString()}</p>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 7. GRÁFICO COMPARATIVO ANUAL (LÍNEAS) */}
-      <div className="bg-[#1C1C1C] p-8 md:p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-[#6B7A3A]/10 rounded-full blur-3xl" />
-        <div className="relative z-10">
-          <div className="flex justify-between items-center mb-12">
-            <div>
-              <h3 className="text-xl font-black uppercase italic tracking-tighter">Comparativo Anual</h3>
-              <p className="text-[9px] font-black uppercase text-gray-500 tracking-[0.3em]">Pesos Argentinos ($)</p>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#6B7A3A]"/> <span className="text-[10px] font-black uppercase">{now.getFullYear()}</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-white/20"/> <span className="text-[10px] font-black uppercase">{now.getFullYear()-1}</span></div>
-            </div>
-          </div>
-
-          <div className="h-[400px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={comparisonData}>
-                <defs>
-                  <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6B7A3A" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#6B7A3A" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#666', fontSize: 10, fontWeight: 'bold'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#666', fontSize: 10, fontWeight: 'bold'}} tickFormatter={(v) => `$${v/1000}k`} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1C1C1C', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#6B7A3A' }}
-                />
-                <Area type="monotone" dataKey="actual" stroke="#6B7A3A" strokeWidth={5} fillOpacity={1} fill="url(#colorActual)" />
-                <Area type="monotone" dataKey="anterior" stroke="rgba(255,255,255,0.1)" strokeWidth={3} fill="transparent" strokeDasharray="10 5" />
-              </AreaChart>
-            </ResponsiveContainer>
           </div>
         </div>
       </div>
