@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { TrendingUp, DollarSign, Briefcase, Calendar, Wallet, Clock, Tag, ShoppingCart } from 'lucide-react';
+import { TrendingUp, DollarSign, Briefcase, Calendar, Wallet, Clock, Tag, ShoppingCart, Info } from 'lucide-react';
 
 const IncomeStatement = () => {
   const { sales } = useStore();
@@ -105,131 +105,145 @@ const IncomeStatement = () => {
   }, [sales]);
 
   return (
-    <div className="p-4 md:p-8 space-y-8 animate-fade-in pb-20 md:pb-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl md:text-3xl font-black text-coffee-900">Resultados Generales</h2>
-        <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest border border-blue-200 shadow-sm">
-           Fórmula Activa: Cobrado - CMV = Utilidad Neta
+    <div className="p-4 md:p-8 space-y-8 bg-white min-h-screen pb-32 text-[#1C1C1C]">
+      
+      {/* HEADER AL ESTILO LA TOSTADORA */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div>
+          <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Resultados <br/><span className="text-[#6B7A3A]">Financieros</span></h2>
+          <p className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em] mt-2">Control de Rentabilidad</p>
+        </div>
+        <div className="bg-gray-50 text-gray-500 px-5 py-3 rounded-[2rem] text-[10px] font-black uppercase tracking-widest border-2 border-gray-100 flex items-center gap-2 shadow-sm">
+           <Info size={16} className="text-[#6B7A3A]"/> Cobrado - CMV = Utilidad Neta
         </div>
       </div>
 
-      {/* KPI CARDS CON LA NUEVA LÓGICA */}
+      {/* KPI CARDS CON NUEVO DISEÑO */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
-           <div className="flex items-center gap-2 text-gray-500 mb-2">
-              <TrendingUp size={18} />
-              <h3 className="font-black uppercase tracking-wider text-[10px]">Facturado Total</h3>
+        {/* Facturado */}
+        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+           <div className="flex items-center gap-2 text-gray-400 mb-2">
+              <TrendingUp size={16} />
+              <h3 className="font-black uppercase tracking-widest text-[9px]">Facturado Total</h3>
            </div>
-           <p className="text-xl font-black text-gray-800">${cashMetrics.totalBilled.toLocaleString()}</p>
+           <p className="text-3xl font-black tracking-tighter text-[#1C1C1C]">${cashMetrics.totalBilled.toLocaleString()}</p>
         </div>
 
-        <div className="bg-amber-50 p-5 rounded-3xl border border-amber-100 shadow-sm">
-           <div className="flex items-center gap-2 text-amber-600 mb-2">
-              <Tag size={18} />
-              <h3 className="font-black uppercase tracking-wider text-[10px]">Descuentos</h3>
+        {/* Descuentos */}
+        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+           <div className="flex items-center gap-2 text-amber-500 mb-2">
+              <Tag size={16} />
+              <h3 className="font-black uppercase tracking-widest text-[9px]">Descuentos</h3>
            </div>
-           <p className="text-xl font-black text-amber-700">-${cashMetrics.totalDiscounts.toLocaleString()}</p>
+           <p className="text-3xl font-black tracking-tighter text-amber-500">-${cashMetrics.totalDiscounts.toLocaleString()}</p>
         </div>
         
-        <div className="bg-green-50 p-5 rounded-3xl border border-green-100 shadow-md">
-           <div className="flex items-center gap-2 text-green-700 mb-2">
-              <Wallet size={18} />
-              <h3 className="font-black uppercase tracking-wider text-[10px]">Realmente Cobrado</h3>
+        {/* Cobrado */}
+        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-[#6B7A3A]/30 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+           <div className="flex items-center gap-2 text-[#6B7A3A] mb-2 relative z-10">
+              <Wallet size={16} />
+              <h3 className="font-black uppercase tracking-widest text-[9px]">Realmente Cobrado</h3>
            </div>
-           <p className="text-xl font-black text-green-900">${cashMetrics.totalCollected.toLocaleString()}</p>
+           <p className="text-3xl font-black tracking-tighter text-[#6B7A3A] relative z-10">${cashMetrics.totalCollected.toLocaleString()}</p>
+           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-[#6B7A3A]/5 rounded-full blur-xl"></div>
         </div>
 
-        <div className="bg-red-50 p-5 rounded-3xl border border-red-100 shadow-sm">
-           <div className="flex items-center gap-2 text-red-600 mb-2">
-              <ShoppingCart size={18} />
-              <h3 className="font-black uppercase tracking-wider text-[10px]">Costo Mercadería (CMV)</h3>
+        {/* CMV */}
+        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+           <div className="flex items-center gap-2 text-red-500 mb-2">
+              <ShoppingCart size={16} />
+              <h3 className="font-black uppercase tracking-widest text-[9px]">Costo (CMV)</h3>
            </div>
-           <p className="text-xl font-black text-red-900">-${cashMetrics.totalCogs.toLocaleString()}</p>
+           <p className="text-3xl font-black tracking-tighter text-red-500">-${cashMetrics.totalCogs.toLocaleString()}</p>
         </div>
 
-        <div className="bg-blue-600 p-5 rounded-3xl border border-blue-700 shadow-xl lg:col-span-1">
-           <div className="flex items-center gap-2 text-blue-100 mb-2">
-              <DollarSign size={18} />
-              <h3 className="font-black uppercase tracking-wider text-[10px]">Utilidad Neta</h3>
+        {/* UTILIDAD NETA (KPI DESTACADO) */}
+        <div className="bg-[#1C1C1C] p-6 rounded-[2.5rem] border-2 border-[#1C1C1C] shadow-2xl lg:col-span-1 flex flex-col justify-center relative overflow-hidden">
+           <div className="flex items-center gap-2 text-gray-400 mb-2 relative z-10">
+              <DollarSign size={16} />
+              <h3 className="font-black uppercase tracking-widest text-[9px]">Utilidad Neta</h3>
            </div>
-           <p className="text-2xl font-black text-white">
+           <p className="text-4xl font-black italic tracking-tighter text-white relative z-10">
              ${cashMetrics.totalProfit.toLocaleString()}
            </p>
+           {/* Efecto de luz de fondo */}
+           <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#6B7A3A]/30 rounded-full blur-3xl"></div>
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100">
-         <h3 className="font-black text-lg mb-6 text-coffee-800 flex items-center gap-2">
-           <Briefcase size={20} /> Rentabilidad Mensual
+      {/* GRÁFICO AL ESTILO DASHBOARD */}
+      <div className="bg-gray-50 p-8 rounded-[3rem] border-2 border-gray-100">
+         <h3 className="text-2xl font-black uppercase italic tracking-tighter mb-8 flex items-center gap-2 text-[#1C1C1C]">
+           Rentabilidad Mensual
          </h3>
          <div className="h-64 md:h-80">
             {monthlyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                    <BarChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tick={{fontSize: 12, fontWeight: 'bold'}} />
-                      <YAxis tick={{fontSize: 12}} />
-                      <Tooltip cursor={{fill: '#f9fafb'}} formatter={(value) => `$${Number(value).toLocaleString()}`} />
-                      <Legend />
-                      <Bar name="Facturado" dataKey="billed" fill="#d2bab0" radius={[6, 6, 0, 0]} />
-                      <Bar name="Cobrado" dataKey="collected" fill="#10b981" radius={[6, 6, 0, 0]} />
-                      <Bar name="CMV" dataKey="cogs" fill="#ef4444" radius={[6, 6, 0, 0]} />
-                      <Bar name="Utilidad Neta" dataKey="profit" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                      <XAxis dataKey="month" tick={{fill: '#666', fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                      <YAxis tick={{fill: '#666', fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1C1C1C', color: '#fff', border: 'none', borderRadius: '1rem' }} itemStyle={{ color: '#fff' }} formatter={(value) => `$${Number(value).toLocaleString()}`} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '20px' }} />
+                      <Bar name="Facturado" dataKey="billed" fill="#E5E7EB" radius={[6, 6, 0, 0]} />
+                      <Bar name="Cobrado" dataKey="collected" fill="#1C1C1C" radius={[6, 6, 0, 0]} />
+                      <Bar name="CMV" dataKey="cogs" fill="#FCA5A5" radius={[6, 6, 0, 0]} />
+                      <Bar name="Utilidad Neta" dataKey="profit" fill="#6B7A3A" radius={[6, 6, 0, 0]} />
                    </BarChart>
                 </ResponsiveContainer>
             ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase tracking-widest text-sm">Sin datos para graficar</div>
+                <div className="flex items-center justify-center h-full text-gray-400 font-black uppercase tracking-widest text-xs">Sin datos para graficar</div>
             )}
          </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-         <div className="p-6 border-b bg-gray-50">
-            <h3 className="font-black text-coffee-900 flex items-center gap-2 uppercase tracking-widest text-sm">
-              <Calendar size={18} /> Detalle Financiero Mensual
+      {/* TABLA DE RESULTADOS */}
+      <div className="bg-white rounded-[3rem] shadow-sm overflow-hidden border-2 border-gray-100">
+         <div className="p-8 border-b-2 border-gray-100 bg-gray-50">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-[#1C1C1C]">
+               Desglose Mensual
             </h3>
          </div>
-         <div className="overflow-x-auto">
+         <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-xs text-left whitespace-nowrap">
-               <thead className="bg-coffee-900 text-white font-black uppercase tracking-tighter">
-                  {/* ORDEN DE COLUMNAS EXACTO COMO LO SOLICITASTE */}
+               <thead className="bg-[#1C1C1C] text-white font-black uppercase tracking-widest text-[10px]">
                   <tr>
-                     <th className="p-5">Mes</th>
+                     <th className="p-5 rounded-tl-3xl">Mes</th>
                      <th className="p-5 text-right">1. Facturado ($)</th>
-                     <th className="p-5 text-right text-amber-200">2. Descuentos</th>
-                     <th className="p-5 text-right text-green-200">3. Cobrado ($)</th>
-                     <th className="p-5 text-right text-blue-200">4. Utilidad Neta</th>
-                     <th className="p-5 text-right text-red-200">5. CMV (Costo)</th>
-                     <th className="p-5 text-center">6. Margen %</th>
+                     <th className="p-5 text-right text-gray-400">2. Descuentos</th>
+                     <th className="p-5 text-right text-[#6B7A3A]">3. Cobrado ($)</th>
+                     <th className="p-5 text-right">4. Utilidad Neta</th>
+                     <th className="p-5 text-right text-red-300">5. CMV (Costo)</th>
+                     <th className="p-5 text-center rounded-tr-3xl">6. Margen %</th>
                   </tr>
                </thead>
-               <tbody className="divide-y divide-gray-100">
+               <tbody className="divide-y-2 divide-gray-50">
                   {monthlyData.length > 0 ? monthlyData.slice().reverse().map((row) => (
-                     <tr key={row.month} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-5 font-black text-gray-700 uppercase">{row.month}</td>
-                        <td className="p-5 text-right text-gray-500 font-bold">${row.billed.toLocaleString()}</td>
-                        <td className="p-5 text-right text-amber-600 font-bold">-${row.discounts.toLocaleString()}</td>
-                        <td className="p-5 text-right text-green-700 font-black">${row.collected.toLocaleString()}</td>
-                        <td className="p-5 text-right text-blue-700 font-black">${row.profit.toLocaleString()}</td>
-                        <td className="p-5 text-right text-red-500 font-medium">${row.cogs.toLocaleString()}</td>
+                     <tr key={row.month} className="hover:bg-gray-50 transition-colors group">
+                        <td className="p-5 font-black text-[#1C1C1C] uppercase">{row.month}</td>
+                        <td className="p-5 text-right text-gray-400 font-bold">${row.billed.toLocaleString()}</td>
+                        <td className="p-5 text-right text-amber-500 font-bold">-${row.discounts.toLocaleString()}</td>
+                        <td className="p-5 text-right text-[#6B7A3A] font-black text-sm">${row.collected.toLocaleString()}</td>
+                        <td className="p-5 text-right text-[#1C1C1C] font-black text-sm">${row.profit.toLocaleString()}</td>
+                        <td className="p-5 text-right text-red-400 font-bold">-${row.cogs.toLocaleString()}</td>
                         <td className="p-5 text-center">
-                          <span className={`px-3 py-1 rounded-full font-black text-[10px] ${row.margin > 35 ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+                          <span className={`px-3 py-1.5 rounded-full font-black text-[10px] border ${row.margin > 35 ? 'bg-[#6B7A3A]/10 text-[#6B7A3A] border-[#6B7A3A]/20' : 'bg-gray-100 text-[#1C1C1C] border-gray-200'}`}>
                             {row.margin.toFixed(1)}%
                           </span>
                         </td>
                      </tr>
                   )) : (
                       <tr>
-                          <td colSpan={7} className="p-10 text-center text-gray-400 uppercase font-black tracking-widest">No hay ventas registradas</td>
+                          <td colSpan={7} className="p-10 text-center text-gray-400 uppercase font-black tracking-widest text-[10px]">No hay ventas registradas</td>
                       </tr>
                   )}
                </tbody>
             </table>
          </div>
-         <div className="p-4 bg-gray-50 text-[10px] text-gray-500 font-bold flex gap-4 justify-center uppercase tracking-widest">
-            <span>Descuentos = Facturado - Cobrado</span>
-            <span>Utilidad Neta = Cobrado - CMV</span>
-            <span>Margen % = (Utilidad Neta / Cobrado) × 100</span>
+         <div className="p-6 bg-gray-50 border-t-2 border-gray-100 text-[9px] text-gray-400 font-black flex flex-wrap gap-4 justify-center uppercase tracking-widest">
+            <span>Desc = Facturado - Cobrado</span>
+            <span className="text-[#6B7A3A]">Utilidad = Cobrado - CMV</span>
+            <span>Margen % = (Utilidad / Cobrado) × 100</span>
          </div>
       </div>
     </div>
