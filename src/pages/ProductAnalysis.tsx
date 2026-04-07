@@ -23,14 +23,13 @@ const ProductAnalysis = () => {
     );
   };
 
-  // --- MOTOR DE ANÁLISIS FILTRADO ---
+  // --- MOTOR DE ANÁLISIS FILTRADO CON MÉTODO PEPS (FIFO) ---
   const analysisData = useMemo(() => {
     if (selectedProductIds.length === 0) return null;
 
     // 1. Determinar el rango de meses a mostrar
     const months = [];
     if (startDate && endDate) {
-      // Si hay fechas, calculamos los meses entre ellas
       let start = new Date(startDate);
       let end = new Date(endDate);
       let current = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -39,7 +38,6 @@ const ProductAnalysis = () => {
         current.setMonth(current.getMonth() + 1);
       }
     } else {
-      // Si no hay fechas, últimos 6 meses por defecto
       for (let i = 5; i >= 0; i--) {
         const d = new Date();
         d.setMonth(d.getMonth() - i);
@@ -47,7 +45,7 @@ const ProductAnalysis = () => {
       }
     }
 
-    // 2. Filtrar ventas por el rango seleccionado
+    // 2. Filtrar ventas por el rango seleccionado para la vista
     const filteredSales = sales.filter(s => {
       const saleDate = s.date.split('T')[0];
       const matchesStart = !startDate || saleDate >= startDate;
@@ -55,11 +53,58 @@ const ProductAnalysis = () => {
       return matchesStart && matchesEnd;
     });
 
-    // MODO INDIVIDUAL
+    // --- FUNCIÓN HELPER: CALCULAR COSTOS PEPS (FIFO) ---
+    const getPepsCostMap = (productId: string) => {
+      // Obtenemos los lotes del producto ordenados por fecha (más antiguos primero)
+      const lotes = purchases
+        .filter(p => p.productId === productId)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map(p => ({ stockDisponible: Number(p.quantity), costo: Number(p.unitCost) }));
+
+      // Obtenemos TODAS las ventas del producto cronológicamente (necesario para consumir bien los lotes)
+      const ventasCronologicas = sales
+        .filter(s => s.items.some(i => i.id === productId))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const mapaCostos = new Map<string, number>();
+
+      ventasCronologicas.forEach(s => {
+        const item = s.items.find(i => i.id === productId);
+        let qtyToConsume = Number(item?.quantity || 0);
+        let costoTotalPeps = 0;
+
+        // Consumir lotes cronológicamente
+        while (qtyToConsume > 0 && lotes.length > 0) {
+          const loteActual = lotes[0];
+          if (loteActual.stockDisponible <= qtyToConsume) {
+            costoTotalPeps += loteActual.stockDisponible * loteActual.costo;
+            qtyToConsume -= loteActual.stockDisponible;
+            lotes.shift(); // Lote agotado, pasamos al siguiente
+          } else {
+            costoTotalPeps += qtyToConsume * loteActual.costo;
+            loteActual.stockDisponible -= qtyToConsume;
+            qtyToConsume = 0;
+          }
+        }
+
+        // Fallback: Si se acaban los lotes registrados, usamos el costo genérico del producto
+        if (qtyToConsume > 0) {
+          costoTotalPeps += qtyToConsume * Number(item?.costPrice || 0);
+        }
+
+        mapaCostos.set(s.id, costoTotalPeps);
+      });
+
+      return mapaCostos;
+    };
+
+    // --- MODO INDIVIDUAL ---
     if (selectedProductIds.length === 1) {
       const pId = selectedProductIds[0];
       let cumulativeProfit = 0;
       
+      const costoPepsMap = getPepsCostMap(pId);
+
       const history = months.map(mKey => {
         const monthSales = filteredSales.filter(s => 
           new Date(s.date).toLocaleString('es-ES', { month: 'short', year: '2-digit' }) === mKey
@@ -70,7 +115,7 @@ const ProductAnalysis = () => {
           const item = s.items.find(i => i.id === pId);
           if (item) {
             revenue += item.quantity * (item.appliedPrice || item.sellingPrice);
-            cogs += item.quantity * (item.costPrice || 0);
+            cogs += costoPepsMap.get(s.id) || 0; // Aplicamos el costo PEPS exacto
             units += item.quantity;
           }
         });
@@ -83,17 +128,19 @@ const ProductAnalysis = () => {
       return { mode: 'single', history, pId };
     }
 
-    // MODO COMPARATIVO
+    // --- MODO COMPARATIVO ---
     if (selectedProductIds.length > 1) {
       const comparison = selectedProductIds.map(pId => {
         const product = products.find(p => p.id === pId);
+        const costoPepsMap = getPepsCostMap(pId);
+        
         let totalRev = 0, totalCogs = 0, totalUnits = 0;
 
         filteredSales.forEach(s => {
           const item = s.items.find(i => i.id === pId);
           if (item) {
             totalRev += item.quantity * (item.appliedPrice || item.sellingPrice);
-            totalCogs += item.quantity * (item.costPrice || 0);
+            totalCogs += costoPepsMap.get(s.id) || 0; // Costo PEPS exacto
             totalUnits += item.quantity;
           }
         });
@@ -111,9 +158,9 @@ const ProductAnalysis = () => {
     }
 
     return null;
-  }, [selectedProductIds, sales, products, startDate, endDate]);
+  }, [selectedProductIds, sales, products, purchases, startDate, endDate]);
 
-  // EL HISTORIAL DE COMPRAS NO SE FILTRA (Siempre completo para el producto)
+  // EL HISTORIAL DE COMPRAS NO SE FILTRA POR FECHA (Siempre completo para auditoría PEPS)
   const productPurchases = useMemo(() => {
     if (selectedProductIds.length !== 1) return [];
     return purchases
@@ -125,7 +172,7 @@ const ProductAnalysis = () => {
 
   // Handlers
   const handleDeletePurchase = (purchaseId: string) => {
-    if (window.confirm("¿Eliminar lote? El stock se restará.")) deletePurchase(purchaseId);
+    if (window.confirm("¿Eliminar lote? El stock se restará y el cálculo PEPS se recalculará.")) deletePurchase(purchaseId);
   };
 
   const handleOpenEdit = (purchase: Purchase) => {
@@ -148,7 +195,7 @@ const ProductAnalysis = () => {
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 border-b border-gray-100 pb-8">
         <div>
           <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">Análisis Estratégico</h2>
-          <p className="text-[#6B7A3A] font-bold text-xs uppercase tracking-[0.2em] mt-2">La Tostadora - Inteligencia de Datos</p>
+          <p className="text-[#6B7A3A] font-bold text-xs uppercase tracking-[0.2em] mt-2">Rentabilidad por Método PEPS</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-3 rounded-[2rem] border border-gray-100 shadow-sm">
@@ -232,8 +279,11 @@ const ProductAnalysis = () => {
                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#6B7A3A] mb-2">Vendidas en Periodo</p>
                    <h4 className="text-5xl font-black">{analysisData.history?.reduce((acc,h) => acc + h.Unidades, 0)}</h4>
                 </div>
-                <div className="bg-white p-7 rounded-[2.5rem] border-2 border-gray-100 shadow-sm flex flex-col justify-center">
-                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">Ganancia Neta</p>
+                <div className="bg-white p-7 rounded-[2.5rem] border-2 border-gray-100 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                   <div className="absolute top-4 right-4 bg-green-50 text-green-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-green-100">
+                     Cálculo PEPS
+                   </div>
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">Ganancia Neta Real</p>
                    <h4 className="text-4xl font-black text-[#1C1C1C]">${analysisData.history?.reduce((acc,h) => acc + h.Ganancia, 0).toLocaleString()}</h4>
                 </div>
                 <div className="bg-gray-50 p-7 rounded-[2.5rem] border-2 border-gray-100 flex flex-col justify-center text-right">
@@ -263,26 +313,29 @@ const ProductAnalysis = () => {
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
                       <YAxis hide />
                       <Tooltip contentStyle={{borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'}} />
-                      <Area name="Ganancia" type="monotone" dataKey="Ganancia" stroke="#6B7A3A" strokeWidth={5} fill="url(#gradAnalysis)" />
+                      <Area name="Ganancia PEPS" type="monotone" dataKey="Ganancia" stroke="#6B7A3A" strokeWidth={5} fill="url(#gradAnalysis)" />
                       <Area name="Acumulado" type="monotone" dataKey="Acumulado" stroke="#1C1C1C" strokeWidth={2} fill="transparent" strokeDasharray="6 4" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* TABLA DE COMPRAS (HISTORIAL COMPLETO) */}
-              <div className="bg-white rounded-[2.5rem] shadow-sm border-2 border-gray-100 overflow-hidden">
+              {/* TABLA DE COMPRAS (HISTORIAL COMPLETO / LOTES PEPS) */}
+              <div className="bg-white rounded-[2.5rem] shadow-sm border-2 border-gray-100 overflow-hidden relative">
                  <div className="p-6 bg-gray-50 border-b flex justify-between items-center">
-                    <h4 className="font-black text-[10px] uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                       <History size={16} /> Trazabilidad Completa de Lotes (Sin Filtrar)
-                    </h4>
+                    <div>
+                      <h4 className="font-black text-[10px] uppercase tracking-widest text-[#1C1C1C] flex items-center gap-2">
+                         <History size={16} className="text-[#6B7A3A]"/> Trazabilidad de Lotes de Compra
+                      </h4>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Estos lotes se consumen automáticamente para calcular el costo (FIFO/PEPS)</p>
+                    </div>
                  </div>
                  <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                        <thead className="bg-[#1C1C1C] text-[#E8DFC8] font-black text-[10px] uppercase">
                           <tr>
                              <th className="p-5 text-left">Fecha de Entrada</th>
-                             <th className="p-5 text-center">Stock Cargado</th>
+                             <th className="p-5 text-center">Stock Comprado</th>
                              <th className="p-5 text-right">Costo Unitario</th>
                              <th className="p-5 text-right">Inversión Total</th>
                              <th className="p-5 text-center">Acciones</th>
@@ -301,6 +354,11 @@ const ProductAnalysis = () => {
                                 </td>
                              </tr>
                           ))}
+                          {productPurchases.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="p-8 text-center text-gray-400 font-black uppercase text-[10px] tracking-widest">No hay lotes de compra registrados</td>
+                            </tr>
+                          )}
                        </tbody>
                     </table>
                  </div>
@@ -309,7 +367,10 @@ const ProductAnalysis = () => {
           ) : (
             // --- VISTA COMPARATIVA FILTRADA ---
             <div className="space-y-6 animate-fade-in">
-              <div className="bg-[#1C1C1C] p-10 rounded-[3rem] text-white border-b-[12px] border-[#6B7A3A] shadow-2xl">
+              <div className="bg-[#1C1C1C] p-10 rounded-[3rem] text-white border-b-[12px] border-[#6B7A3A] shadow-2xl relative">
+                <div className="absolute top-8 right-10 bg-white/10 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-white/20">
+                     Cálculo PEPS Activo
+                </div>
                 <div className="flex justify-between items-center mb-10">
                   <h3 className="text-xs font-black uppercase tracking-[0.3em] text-[#6B7A3A]">Ranking Comparativo {startDate && '(Filtrado)'}</h3>
                   <ArrowRightLeft className="text-white/20" size={32}/>
@@ -322,7 +383,7 @@ const ProductAnalysis = () => {
                       <YAxis hide />
                       <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{borderRadius: '1rem', border: 'none', backgroundColor: '#fff', color: '#000'}} />
                       <Bar name="Ventas" dataKey="Ventas" fill="#6B7A3A" radius={[12, 12, 0, 0]} barSize={40} />
-                      <Bar name="Ganancia" dataKey="Ganancia" fill="#E8DFC8" radius={[12, 12, 0, 0]} barSize={40} />
+                      <Bar name="Ganancia PEPS" dataKey="Ganancia" fill="#E8DFC8" radius={[12, 12, 0, 0]} barSize={40} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -346,7 +407,7 @@ const ProductAnalysis = () => {
         </div>
       </div>
 
-      {/* MODAL EDITAR COMPRA (RESTAURADO) */}
+      {/* MODAL EDITAR COMPRA */}
       {isEditModalOpen && editingPurchase && (
         <div className="fixed inset-0 bg-[#1C1C1C]/90 z-[110] flex items-center justify-center p-4 backdrop-blur-md">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl border-4 border-[#6B7A3A] overflow-hidden animate-scale-up">
