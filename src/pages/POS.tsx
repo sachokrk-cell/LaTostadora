@@ -203,7 +203,6 @@ const POS = () => {
   const total = subtotal - discount;
   const totalItems = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
 
-  // Actualiza el monto recibido automáticamente al cambiar el total
   useEffect(() => {
     setAmountPaid(total);
   }, [total]);
@@ -212,7 +211,6 @@ const POS = () => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        // Validamos stock antes de sumar
         if (product.stock <= existing.quantity) {
             alert('Sin stock disponible');
             return prev;
@@ -247,7 +245,6 @@ const POS = () => {
     if (cart.length === 0) return;
     const balance = total - amountPaid;
     
-    // Seguridad: no permitir deuda sin cliente
     if (balance > 0 && !selectedClient) {
         alert("Debe seleccionar un cliente para registrar una deuda.");
         return;
@@ -324,14 +321,14 @@ const POS = () => {
               <div className="w-20 h-20 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-inner">
                 <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 pr-2"> {/* Agregamos Padding Right para separar del botón */}
                 <h3 className="font-black text-[#1C1C1C] text-sm uppercase leading-tight mb-1 truncate">{product.name}</h3>
-                <p className="text-xl font-black text-[#6B7A3A] tracking-tighter">${product.sellingPrice}</p>
+                <p className="text-xl font-black text-[#6B7A3A] tracking-tighter">${product.sellingPrice.toLocaleString()}</p>
                 <div className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full w-fit mt-1 border ${product.stock > 10 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
                   {product.stock} en stock
                 </div>
               </div>
-              <div className="p-2 bg-gray-50 rounded-full text-[#1C1C1C] group-hover:bg-[#6B7A3A] group-hover:text-white transition-colors">
+              <div className="flex-shrink-0 p-2 bg-gray-50 rounded-full text-[#1C1C1C] group-hover:bg-[#6B7A3A] group-hover:text-white transition-colors">
                 <Plus size={20} />
               </div>
             </button>
@@ -424,12 +421,12 @@ const POS = () => {
                <div className="relative">
                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                  <input 
-                   autoFocus
-                   type="text" 
-                   placeholder="Nombre del cliente..." 
-                   className="w-full pl-12 pr-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-[#6B7A3A] outline-none text-[#1C1C1C] font-bold transition-all"
-                   value={clientSearchTerm}
-                   onChange={(e) => setClientSearchTerm(e.target.value)}
+                    autoFocus
+                    type="text" 
+                    placeholder="Nombre del cliente..." 
+                    className="w-full pl-12 pr-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-[#6B7A3A] outline-none text-[#1C1C1C] font-bold transition-all"
+                    value={clientSearchTerm}
+                    onChange={(e) => setClientSearchTerm(e.target.value)}
                  />
                </div>
              </div>
