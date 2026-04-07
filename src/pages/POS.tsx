@@ -309,26 +309,38 @@ const POS = () => {
           </div>
         </div>
         
-        {/* GRILLA DE PRODUCTOS RESPONSIVA */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 overflow-y-auto pb-32 custom-scrollbar">
+        {/* GRILLA DE PRODUCTOS - AJUSTE DE COLUMNAS PARA PC */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 overflow-y-auto pb-32 custom-scrollbar">
           {filteredProducts.map(product => (
             <button 
               key={product.id}
               onClick={() => addToCart(product)}
               disabled={product.stock <= 0}
-              className={`bg-white p-4 rounded-[2rem] border-2 transition-all flex flex-row items-center gap-4 text-left shadow-sm hover:shadow-md active:scale-[0.97] ${product.stock <= 0 ? 'opacity-30 grayscale cursor-not-allowed border-gray-100' : 'border-gray-50 hover:border-[#6B7A3A]'}`}
+              className={`bg-white p-3 rounded-[2.5rem] border-2 transition-all flex items-center gap-3 text-left shadow-sm hover:shadow-md active:scale-[0.98] group ${product.stock <= 0 ? 'opacity-30 grayscale cursor-not-allowed border-gray-100' : 'border-gray-50 hover:border-[#6B7A3A]'}`}
             >
-              <div className="w-20 h-20 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-inner">
+              {/* Imagen con tamaño fijo y controlado */}
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-inner">
                 <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
               </div>
-              <div className="flex-1 min-w-0 pr-2"> {/* Agregamos Padding Right para separar del botón */}
-                <h3 className="font-black text-[#1C1C1C] text-sm uppercase leading-tight mb-1 truncate">{product.name}</h3>
-                <p className="text-xl font-black text-[#6B7A3A] tracking-tighter">${product.sellingPrice.toLocaleString()}</p>
-                <div className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full w-fit mt-1 border ${product.stock > 10 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                  {product.stock} en stock
+
+              {/* Contenedor central de información - Flex grow para ocupar el espacio medio */}
+              <div className="flex-1 flex flex-col min-w-0 py-1">
+                <h3 className="font-black text-[#1C1C1C] text-[11px] sm:text-xs uppercase leading-tight truncate mb-1">
+                  {product.name}
+                </h3>
+                
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-lg sm:text-xl font-black text-[#6B7A3A] tracking-tighter leading-none">
+                    ${product.sellingPrice.toLocaleString()}
+                  </p>
+                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg w-fit mt-1 border ${product.stock > 10 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                    Stock: {product.stock}
+                  </span>
                 </div>
               </div>
-              <div className="flex-shrink-0 p-2 bg-gray-50 rounded-full text-[#1C1C1C] group-hover:bg-[#6B7A3A] group-hover:text-white transition-colors">
+
+              {/* Botón de acción - Totalmente separado en el extremo derecho */}
+              <div className="flex-shrink-0 w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-[#1C1C1C] group-hover:bg-[#6B7A3A] group-hover:text-white transition-all shadow-sm">
                 <Plus size={20} />
               </div>
             </button>
