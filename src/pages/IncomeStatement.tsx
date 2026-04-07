@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -9,19 +8,21 @@ const IncomeStatement = () => {
 
   const { monthlyData, cashMetrics } = useMemo(() => {
     const data: Record<string, { 
-        billed: number, // Subtotal (Bruto)
+        billed: number, // Subtotal real de los items (Bruto)
         discounts: number, // Descuentos aplicados
         cogs: number, // Costo mercadería
         profit: number, 
         itemsSold: number, 
         ticketCount: number,
-        pendingMonth: number
+        pendingMonth: number,
+        amountPaid: number // Lo que realmente ingreso
     }> = {};
 
     let totalBilled = 0;
     let totalDiscounts = 0;
     let totalPending = 0;
     let totalCogs = 0;
+    let totalPaid = 0;
 
     sales.forEach(sale => {
       const saleDate = new Date(sale.date);
@@ -32,34 +33,52 @@ const IncomeStatement = () => {
       const key = `${year}-${month}`;
       
       if (!data[key]) {
-        data[key] = { billed: 0, discounts: 0, cogs: 0, profit: 0, itemsSold: 0, ticketCount: 0, pendingMonth: 0 };
+        data[key] = { billed: 0, discounts: 0, cogs: 0, profit: 0, itemsSold: 0, ticketCount: 0, pendingMonth: 0, amountPaid: 0 };
       }
 
-      const safeSubtotal = Number(sale.subtotal) || Number(sale.total) + (Number(sale.discountAmount) || 0);
-      const safeDiscount = Number(sale.discountAmount) || 0;
-      const safeBalance = Number(sale.balance) || 0;
+      // --- CÁLCULO ESTRICTO DESDE LOS ITEMS ---
+      let saleSubtotal = 0;
+      let saleCogs = 0;
 
-      totalBilled += safeSubtotal;
-      totalDiscounts += safeDiscount;
-      totalPending += safeBalance;
-
-      data[key].billed += safeSubtotal;
-      data[key].discounts += safeDiscount;
-      data[key].pendingMonth += safeBalance;
-      data[key].ticketCount += 1;
-
-      (sale.items || []).forEach(item => {
+      (sale.items || []).forEach((item: any) => {
+         const itemPrice = Number(item.appliedPrice) || 0;
          const itemCost = Number(item.costPrice) || 0;
          const itemQty = Number(item.quantity) || 0;
+         
+         const revenueLine = itemPrice * itemQty;
          const costLine = itemCost * itemQty;
+         
+         saleSubtotal += revenueLine;
+         saleCogs += costLine;
+         
          data[key].itemsSold += itemQty;
-         data[key].cogs += costLine;
-         totalCogs += costLine;
       });
+
+      // Si por alguna razón la venta no tiene items (datos antiguos), intentamos usar los totales de la venta
+      if (saleSubtotal === 0 && sale.total) {
+          saleSubtotal = (Number(sale.subtotal) || Number(sale.total) + (Number(sale.discountAmount) || 0));
+      }
+
+      const safeDiscount = Number(sale.discountAmount) || 0;
+      const safeBalance = Number(sale.balance) || 0;
+      const safePaid = Number(sale.amount_paid) || Number(sale.amountPaid) || 0; // Usamos el campo directo de lo pagado
+
+      totalBilled += saleSubtotal;
+      totalDiscounts += safeDiscount;
+      totalPending += safeBalance;
+      totalCogs += saleCogs;
+      totalPaid += safePaid;
+
+      data[key].billed += saleSubtotal;
+      data[key].discounts += safeDiscount;
+      data[key].cogs += saleCogs;
+      data[key].pendingMonth += safeBalance;
+      data[key].amountPaid += safePaid;
+      data[key].ticketCount += 1;
     });
 
     Object.keys(data).forEach(key => {
-        // Utilidad = Facturado - Descuentos - Costo
+        // Utilidad = Facturado (Bruto) - Descuentos - Costo (CMV)
         data[key].profit = data[key].billed - data[key].discounts - data[key].cogs;
     });
 
@@ -67,9 +86,8 @@ const IncomeStatement = () => {
       .map(([month, stats]) => ({
         month,
         ...stats,
-        // Cobrado = (Facturado - Descuentos) - Pendiente
-        collectedMonth: (stats.billed - stats.discounts) - stats.pendingMonth,
-        margin: stats.billed > 0 ? (stats.profit / (stats.billed - stats.discounts)) * 100 : 0
+        collectedMonth: stats.amountPaid, // Lo cobrado es exactamente lo que entró de plata
+        margin: (stats.billed - stats.discounts) > 0 ? (stats.profit / (stats.billed - stats.discounts)) * 100 : 0
       }))
       .sort((a, b) => a.month.localeCompare(b.month));
 
@@ -81,7 +99,7 @@ const IncomeStatement = () => {
           totalPending, 
           totalCogs,
           totalProfit: totalBilled - totalDiscounts - totalCogs,
-          totalCollected: (totalBilled - totalDiscounts) - totalPending 
+          totalCollected: totalPaid // Usamos el total pagado acumulado
         }
     };
   }, [sales]);
