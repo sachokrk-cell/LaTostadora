@@ -121,9 +121,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addProduct: async (p) => { await supabase.from('products').insert([{ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }]); await refreshData(); },
       updateProduct: async (p) => { await supabase.from('products').update({ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }).eq('id', p.id); await refreshData(); },
       deleteProduct: async (id) => { await supabase.from('products').delete().eq('id', id); await refreshData(); },
-      addClient: async (c) => { await supabase.from('clients').insert([{ ...c, total_spent: c.totalSpent }]); await refreshData(); },
-      updateClient: async (c) => { await supabase.from('clients').update({ ...c, total_spent: c.totalSpent }).eq('id', c.id); await refreshData(); },
+      
+      // FIX 1: Limpieza de objetos al crear clientes para evitar error de Supabase
+      addClient: async (c) => { 
+        await supabase.from('clients').insert([{ 
+          id: c.id, 
+          name: c.name, 
+          email: c.email || null, 
+          phone: c.phone || null, 
+          notes: c.notes || null, 
+          total_spent: c.totalSpent || 0 
+        }]); 
+        await refreshData(); 
+      },
+      updateClient: async (c) => { 
+        await supabase.from('clients').update({ 
+          name: c.name, 
+          email: c.email || null, 
+          phone: c.phone || null, 
+          notes: c.notes || null, 
+          total_spent: c.totalSpent || 0 
+        }).eq('id', c.id); 
+        await refreshData(); 
+      },
       deleteClient: async (id) => { await supabase.from('clients').delete().eq('id', id); await refreshData(); },
+      
       addSale: async (s) => {
         await supabase.from('sales').insert([{ id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date, total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod, items: s.items }]);
         for (const item of s.items) {
@@ -132,7 +154,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         await refreshData();
       },
-      deleteSale: async (id) => { await supabase.from('sales').delete().eq('id', id); await refreshData(); },
+      
+      // FIX 2: Restaurar stock al eliminar una venta
+      deleteSale: async (id) => { 
+        // Primero buscamos la venta para saber qué productos devolver al stock
+        const saleToDelete = sales.find(s => s.id === id);
+        if (saleToDelete && saleToDelete.items) {
+          for (const item of saleToDelete.items) {
+            const p = products.find(x => x.id === item.id);
+            if (p) {
+              await supabase.from('products').update({ stock: p.stock + item.quantity }).eq('id', p.id);
+            }
+          }
+        }
+        // Luego eliminamos la venta
+        await supabase.from('sales').delete().eq('id', id); 
+        await refreshData(); 
+      },
+      
       addPurchase, addConsumption, updateGlobalSettings, importData, refreshData
     }}>
       {children}
