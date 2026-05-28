@@ -23,6 +23,18 @@ interface StoreContextType extends AppState {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
+const toProductRow = (p: Product) => ({
+  id: p.id,
+  name: p.name,
+  description: p.description || '',
+  category: p.category || 'Otros',
+  cost_price: Number(p.costPrice) || 0,
+  margin_percentage: Number(p.marginPercentage) || 0,
+  selling_price: Number(p.sellingPrice) || 0,
+  stock: Number(p.stock) || 0,
+  image_url: p.imageUrl || ''
+});
+
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -44,12 +56,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         supabase.from('settings').select('*').eq('id', 'global_config').maybeSingle()
       ]);
 
-      if (p.data) setProducts(p.data.map((x: any) => ({ ...x, costPrice: x.cost_price, marginPercentage: x.margin_percentage, sellingPrice: x.selling_price, imageUrl: x.image_url || '' })));
-      if (c.data) setClients(c.data.map((x: any) => ({ ...x, totalSpent: x.total_spent })));
-      if (s.data) setSales(s.data.map((x: any) => ({ ...x, clientId: x.client_id, clientName: x.client_name, amountPaid: x.amount_paid, paymentMethod: x.payment_method, items: x.items || [] })));
-      if (pur.data) setPurchases(pur.data.map((x: any) => ({ ...x, productId: x.product_id, productName: x.product_name, unitCost: x.unit_cost, totalCost: x.total_cost })));
-      if (cons.data) setConsumptions(cons.data.map((x: any) => ({ ...x, productId: x.product_id, productName: x.product_name })));
-      if (sett.data) { setMonthlyGoal(sett.data.monthly_goal); setStockThreshold(sett.data.stock_threshold); }
+      if (p.data) setProducts(p.data.map((x: any) => ({
+        ...x,
+        costPrice: x.cost_price,
+        marginPercentage: x.margin_percentage,
+        sellingPrice: x.selling_price,
+        imageUrl: x.image_url || ''
+      })));
+
+      if (c.data) setClients(c.data.map((x: any) => ({
+        ...x,
+        totalSpent: x.total_spent
+      })));
+
+      if (s.data) setSales(s.data.map((x: any) => ({
+        ...x,
+        clientId: x.client_id,
+        clientName: x.client_name,
+        amountPaid: x.amount_paid,
+        paymentMethod: x.payment_method,
+        items: x.items || []
+      })));
+
+      if (pur.data) setPurchases(pur.data.map((x: any) => ({
+        ...x,
+        productId: x.product_id,
+        productName: x.product_name,
+        unitCost: x.unit_cost,
+        totalCost: x.total_cost
+      })));
+
+      if (cons.data) setConsumptions(cons.data.map((x: any) => ({
+        ...x,
+        productId: x.product_id,
+        productName: x.product_name
+      })));
+
+      if (sett.data) {
+        setMonthlyGoal(sett.data.monthly_goal);
+        setStockThreshold(sett.data.stock_threshold);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -57,122 +103,333 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     refreshData();
-    const sub = supabase.channel('la_tostadora_v5').on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData()).subscribe();
-    return () => { supabase.removeChannel(sub); };
+
+    const sub = supabase
+      .channel('la_tostadora_v5')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sub);
+    };
   }, []);
+
+  const addProduct = async (p: Product) => {
+    const { error } = await supabase.from('products').insert([toProductRow(p)]);
+
+    if (error) {
+      console.error('Error al crear producto:', error);
+      alert('No se pudo crear el producto.');
+      throw error;
+    }
+
+    await refreshData();
+  };
+
+  const updateProduct = async (p: Product) => {
+    const row = toProductRow(p);
+    const { id, ...payload } = row;
+
+    const { error } = await supabase
+      .from('products')
+      .update(payload)
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error al actualizar producto:', error);
+      alert('No se pudo actualizar el producto.');
+      throw error;
+    }
+
+    await refreshData();
+  };
 
   const addPurchase = async (p: Purchase) => {
     const { error } = await supabase.from('purchases').insert([{
-      id: p.id, date: p.date, product_id: p.productId, product_name: p.productName, quantity: p.quantity, unit_cost: p.unitCost, total_cost: p.totalCost
+      id: p.id,
+      date: p.date,
+      product_id: p.productId,
+      product_name: p.productName,
+      quantity: p.quantity,
+      unit_cost: p.unitCost,
+      total_cost: p.totalCost
     }]);
-    if (!error) {
-      const prod = products.find(x => x.id === p.productId);
-      if (prod) await supabase.from('products').update({ stock: prod.stock + p.quantity, cost_price: p.unitCost }).eq('id', p.productId);
-      await refreshData();
+
+    if (error) {
+      console.error('Error al cargar compra:', error);
+      alert('No se pudo cargar la compra.');
+      throw error;
     }
+
+    const prod = products.find(x => x.id === p.productId);
+    if (prod) {
+      const { error: productError } = await supabase
+        .from('products')
+        .update({
+          stock: prod.stock + p.quantity,
+          cost_price: p.unitCost
+        })
+        .eq('id', p.productId);
+
+      if (productError) {
+        console.error('Error al actualizar stock por compra:', productError);
+        alert('La compra se cargó, pero no se pudo actualizar el stock.');
+        throw productError;
+      }
+    }
+
+    await refreshData();
   };
 
   const addConsumption = async (c: Consumption) => {
     const { error } = await supabase.from('consumptions').insert([{
-      id: c.id, date: c.date, product_id: c.productId, product_name: c.productName, quantity: c.quantity, reason: c.reason
+      id: c.id,
+      date: c.date,
+      product_id: c.productId,
+      product_name: c.productName,
+      quantity: c.quantity,
+      reason: c.reason
     }]);
-    if (!error) {
-      const prod = products.find(x => x.id === c.productId);
-      if (prod) await supabase.from('products').update({ stock: prod.stock - c.quantity }).eq('id', c.productId);
-      await refreshData();
+
+    if (error) {
+      console.error('Error al cargar consumo:', error);
+      alert('No se pudo cargar el consumo.');
+      throw error;
     }
+
+    const prod = products.find(x => x.id === c.productId);
+    if (prod) {
+      const { error: productError } = await supabase
+        .from('products')
+        .update({ stock: prod.stock - c.quantity })
+        .eq('id', c.productId);
+
+      if (productError) {
+        console.error('Error al actualizar stock por consumo:', productError);
+        alert('El consumo se cargó, pero no se pudo actualizar el stock.');
+        throw productError;
+      }
+    }
+
+    await refreshData();
   };
 
   const updateGlobalSettings = async (g: number, t: number) => {
-    await supabase.from('settings').upsert({ id: 'global_config', monthly_goal: g, stock_threshold: t });
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ id: 'global_config', monthly_goal: g, stock_threshold: t });
+
+    if (error) {
+      console.error('Error al actualizar configuración:', error);
+      alert('No se pudo actualizar la configuración.');
+      throw error;
+    }
+
     await refreshData();
   };
 
   const importData = async (jsonData: string) => {
     setIsLoading(true);
+
     try {
       const data = JSON.parse(jsonData);
+
       if (data.products) {
         for (const p of data.products) {
-          await supabase.from('products').upsert({
-            id: p.id, name: p.name, description: p.description, category: p.category,
-            cost_price: p.costPrice, margin_percentage: p.marginPercentage,
-            selling_price: p.sellingPrice, stock: p.stock, image_url: p.imageUrl
+          const { error } = await supabase.from('products').upsert({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            category: p.category,
+            cost_price: p.costPrice,
+            margin_percentage: p.marginPercentage,
+            selling_price: p.sellingPrice,
+            stock: p.stock,
+            image_url: p.imageUrl
           });
+
+          if (error) throw error;
         }
       }
+
       if (data.sales) {
         for (const s of data.sales) {
-          await supabase.from('sales').upsert({
-            id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date,
-            total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod, items: s.items
+          const { error } = await supabase.from('sales').upsert({
+            id: s.id,
+            client_id: s.clientId,
+            client_name: s.clientName,
+            date: s.date,
+            total: s.total,
+            amount_paid: s.amountPaid,
+            balance: s.balance,
+            payment_method: s.paymentMethod,
+            items: s.items
           });
+
+          if (error) throw error;
         }
       }
+
       await refreshData();
-      alert("¡Sincronización completa!");
-    } catch (e) { alert("Error al importar."); }
-    finally { setIsLoading(false); }
+      alert('¡Sincronización completa!');
+    } catch (e) {
+      console.error('Error al importar:', e);
+      alert('Error al importar.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <StoreContext.Provider value={{ 
-      products, clients, sales, purchases, consumptions, isLoading, monthlyGoal, stockThreshold,
-      addProduct: async (p) => { await supabase.from('products').insert([{ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }]); await refreshData(); },
-      updateProduct: async (p) => { await supabase.from('products').update({ ...p, cost_price: p.costPrice, margin_percentage: p.marginPercentage, selling_price: p.sellingPrice, image_url: p.imageUrl }).eq('id', p.id); await refreshData(); },
-      deleteProduct: async (id) => { await supabase.from('products').delete().eq('id', id); await refreshData(); },
-      
-      // FIX 1: Limpieza de objetos al crear clientes para evitar error de Supabase
-      addClient: async (c) => { 
-        await supabase.from('clients').insert([{ 
-          id: c.id, 
-          name: c.name, 
-          email: c.email || null, 
-          phone: c.phone || null, 
-          notes: c.notes || null, 
-          total_spent: c.totalSpent || 0 
-        }]); 
-        await refreshData(); 
-      },
-      updateClient: async (c) => { 
-        await supabase.from('clients').update({ 
-          name: c.name, 
-          email: c.email || null, 
-          phone: c.phone || null, 
-          notes: c.notes || null, 
-          total_spent: c.totalSpent || 0 
-        }).eq('id', c.id); 
-        await refreshData(); 
-      },
-      deleteClient: async (id) => { await supabase.from('clients').delete().eq('id', id); await refreshData(); },
-      
-      addSale: async (s) => {
-        await supabase.from('sales').insert([{ id: s.id, client_id: s.clientId, client_name: s.clientName, date: s.date, total: s.total, amount_paid: s.amountPaid, balance: s.balance, payment_method: s.paymentMethod, items: s.items }]);
-        for (const item of s.items) {
-          const p = products.find(x => x.id === item.id);
-          if (p) await supabase.from('products').update({ stock: p.stock - item.quantity }).eq('id', p.id);
+    <StoreContext.Provider value={{
+      products,
+      clients,
+      sales,
+      purchases,
+      consumptions,
+      isLoading,
+      monthlyGoal,
+      stockThreshold,
+
+      addProduct,
+      updateProduct,
+
+      deleteProduct: async (id) => {
+        const { error } = await supabase.from('products').delete().eq('id', id);
+
+        if (error) {
+          console.error('Error al borrar producto:', error);
+          alert('No se pudo borrar el producto.');
+          throw error;
         }
+
         await refreshData();
       },
-      
-      // FIX 2: Restaurar stock al eliminar una venta
-      deleteSale: async (id) => { 
-        // Primero buscamos la venta para saber qué productos devolver al stock
+
+      addClient: async (c) => {
+        const { error } = await supabase.from('clients').insert([{
+          id: c.id,
+          name: c.name,
+          email: c.email || null,
+          phone: c.phone || null,
+          notes: c.notes || null,
+          total_spent: c.totalSpent || 0
+        }]);
+
+        if (error) {
+          console.error('Error al crear cliente:', error);
+          alert('No se pudo crear el cliente.');
+          throw error;
+        }
+
+        await refreshData();
+      },
+
+      updateClient: async (c) => {
+        const { error } = await supabase.from('clients').update({
+          name: c.name,
+          email: c.email || null,
+          phone: c.phone || null,
+          notes: c.notes || null,
+          total_spent: c.totalSpent || 0
+        }).eq('id', c.id);
+
+        if (error) {
+          console.error('Error al actualizar cliente:', error);
+          alert('No se pudo actualizar el cliente.');
+          throw error;
+        }
+
+        await refreshData();
+      },
+
+      deleteClient: async (id) => {
+        const { error } = await supabase.from('clients').delete().eq('id', id);
+
+        if (error) {
+          console.error('Error al borrar cliente:', error);
+          alert('No se pudo borrar el cliente.');
+          throw error;
+        }
+
+        await refreshData();
+      },
+
+      addSale: async (s) => {
+        const { error } = await supabase.from('sales').insert([{
+          id: s.id,
+          client_id: s.clientId,
+          client_name: s.clientName,
+          date: s.date,
+          total: s.total,
+          amount_paid: s.amountPaid,
+          balance: s.balance,
+          payment_method: s.paymentMethod,
+          items: s.items
+        }]);
+
+        if (error) {
+          console.error('Error al registrar venta:', error);
+          alert('No se pudo registrar la venta.');
+          throw error;
+        }
+
+        for (const item of s.items) {
+          const p = products.find(x => x.id === item.id);
+          if (p) {
+            const { error: productError } = await supabase
+              .from('products')
+              .update({ stock: p.stock - item.quantity })
+              .eq('id', p.id);
+
+            if (productError) {
+              console.error('Error al descontar stock:', productError);
+              alert('La venta se registró, pero no se pudo descontar el stock.');
+              throw productError;
+            }
+          }
+        }
+
+        await refreshData();
+      },
+
+      deleteSale: async (id) => {
         const saleToDelete = sales.find(s => s.id === id);
+
         if (saleToDelete && saleToDelete.items) {
           for (const item of saleToDelete.items) {
             const p = products.find(x => x.id === item.id);
             if (p) {
-              await supabase.from('products').update({ stock: p.stock + item.quantity }).eq('id', p.id);
+              const { error: productError } = await supabase
+                .from('products')
+                .update({ stock: p.stock + item.quantity })
+                .eq('id', p.id);
+
+              if (productError) {
+                console.error('Error al restaurar stock:', productError);
+                alert('No se pudo restaurar el stock de la venta.');
+                throw productError;
+              }
             }
           }
         }
-        // Luego eliminamos la venta
-        await supabase.from('sales').delete().eq('id', id); 
-        await refreshData(); 
+
+        const { error } = await supabase.from('sales').delete().eq('id', id);
+
+        if (error) {
+          console.error('Error al eliminar venta:', error);
+          alert('No se pudo eliminar la venta.');
+          throw error;
+        }
+
+        await refreshData();
       },
-      
-      addPurchase, addConsumption, updateGlobalSettings, importData, refreshData
+
+      addPurchase,
+      addConsumption,
+      updateGlobalSettings,
+      importData,
+      refreshData
     }}>
       {children}
     </StoreContext.Provider>
