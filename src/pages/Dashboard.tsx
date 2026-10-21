@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
+import DataLoadError from '../components/DataLoadError';
 import { 
   TrendingUp, Users, AlertTriangle, Coffee, 
   ChevronRight, ArrowUpRight, Calendar, 
@@ -13,7 +14,7 @@ import {
 const Dashboard = () => {
   const { 
     sales = [], products = [], clients = [], consumptions = [], 
-    monthlyGoal = 1000000, stockThreshold = 10, updateGlobalSettings, isLoading 
+    monthlyGoal = 1000000, stockThreshold = 10, updateGlobalSettings, isLoading, loadErrors, refreshData
   } = useStore();
 
   // ESTADOS
@@ -108,6 +109,9 @@ const Dashboard = () => {
   };
 
   if (isLoading) return <div className="h-screen flex items-center justify-center font-black animate-pulse uppercase">Cargando Dashboard...</div>;
+  const dashboardError = ['sales', 'products', 'clients', 'consumptions', 'settings']
+    .filter(table => loadErrors[table]).map(table => `${table}: ${loadErrors[table]}`).join(' | ');
+  if (dashboardError) return <DataLoadError message={dashboardError} onRetry={() => { void refreshData(); }} />;
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-white min-h-screen pb-32 text-[#1C1C1C]">
