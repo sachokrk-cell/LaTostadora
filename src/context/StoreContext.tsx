@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Product, Client, Sale, Purchase, Consumption } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { loadSalesInPages } from '../services/salesLoader';
 
 interface StoreContextType extends AppState {
   addProduct: (p: Product) => Promise<void>;
@@ -18,6 +19,7 @@ interface StoreContextType extends AppState {
   stockThreshold: number;
   updateGlobalSettings: (g: number, t: number) => Promise<void>;
   isLoading: boolean;
+  loadErrors: Record<string, string>;
   refreshData: () => Promise<void>;
 }
 
@@ -44,17 +46,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [monthlyGoal, setMonthlyGoal] = useState(1000000);
   const [stockThreshold, setStockThreshold] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+  const refreshSequence = useRef(0);
 
   const refreshData = async () => {
+    const sequence = ++refreshSequence.current;
+    setIsLoading(true);
     try {
       const [p, c, s, pur, cons, sett] = await Promise.all([
         supabase.from('products').select('*').order('name'),
         supabase.from('clients').select('*').order('name'),
-        supabase.from('sales').select('*').order('date', { ascending: false }),
+        loadSalesInPages(supabase).then(
+          data => ({ data, error: null }),
+          error => ({ data: null, error })
+        ),
         supabase.from('purchases').select('*').order('date', { ascending: false }),
         supabase.from('consumptions').select('*').order('date', { ascending: false }),
         supabase.from('settings').select('*').eq('id', 'global_config').maybeSingle()
       ]);
+
+      // Una respuesta anterior no debe reemplazar una actualización más reciente.
+      if (sequence !== refreshSequence.current) return;
+      const errors: Record<string, string> = {};
+      for (const [table, result] of Object.entries({ products: p, clients: c, sales: s, purchases: pur, consumptions: cons, settings: sett })) {
+        if (result.error) {
+          errors[table] = result.error.message || 'No se pudo consultar la tabla.';
+          console.error(`Error de lectura en ${table}:`, result.error);
+        }
+      }
+      setLoadErrors(errors);
 
       if (p.data) setProducts(p.data.map((x: any) => ({
         ...x,
@@ -96,8 +116,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setMonthlyGoal(sett.data.monthly_goal);
         setStockThreshold(sett.data.stock_threshold);
       }
+    } catch (error) {
+      if (sequence === refreshSequence.current) {
+        console.error('Error al actualizar los datos:', error);
+        setLoadErrors({ sales: error instanceof Error ? error.message : 'No se pudieron actualizar los datos.' });
+      }
     } finally {
-      setIsLoading(false);
+      if (sequence === refreshSequence.current) setIsLoading(false);
     }
   };
 
@@ -288,6 +313,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       purchases,
       consumptions,
       isLoading,
+      loadErrors,
       monthlyGoal,
       stockThreshold,
 
