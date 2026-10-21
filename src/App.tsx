@@ -1,17 +1,26 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import Inventory from './pages/Inventory';
-import POS from './pages/POS';
-import Clients from './pages/Clients';
-import Advisor from './pages/Advisor';
-import IncomeStatement from './pages/IncomeStatement';
-import SalesHistory from './pages/SalesHistory';
-import ProductAnalysis from './pages/ProductAnalysis';
-import SyncCenter from './pages/SyncCenter';
-import { StoreProvider } from './context/StoreContext';
+import PageErrorBoundary from './components/PageErrorBoundary';
+import { StoreProvider, useStore } from './context/StoreContext';
 import { Menu, Home, ShoppingCart, Package, TrendingUp, BarChart3 } from 'lucide-react';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const POS = lazy(() => import('./pages/POS'));
+const Clients = lazy(() => import('./pages/Clients'));
+const Advisor = lazy(() => import('./pages/Advisor'));
+const IncomeStatement = lazy(() => import('./pages/IncomeStatement'));
+const SalesHistory = lazy(() => import('./pages/SalesHistory'));
+const ProductAnalysis = lazy(() => import('./pages/ProductAnalysis'));
+const SyncCenter = lazy(() => import('./pages/SyncCenter'));
+
+const RefreshIndicator = () => {
+  const { isLoading, isRefreshing } = useStore();
+  return !isLoading && isRefreshing
+    ? <p role="status" className="mb-2 text-xs font-bold text-gray-500">Actualizando datos...</p>
+    : null;
+};
 
 const BottomNav = () => {
   const location = useLocation();
@@ -65,6 +74,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         {/* Área de Contenido Principal */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-white">
           <div className="max-w-7xl mx-auto">
+            <RefreshIndicator />
             {children}
           </div>
         </main>
@@ -81,6 +91,8 @@ const App = () => {
     <StoreProvider>
       <Router>
         <Layout>
+          <PageErrorBoundary>
+          <Suspense fallback={<div role="status" className="p-8 font-bold">Cargando sección...</div>}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/pos" element={<POS />} />
@@ -92,6 +104,8 @@ const App = () => {
             <Route path="/advisor" element={<Advisor />} />
             <Route path="/sync" element={<SyncCenter />} />
           </Routes>
+          </Suspense>
+          </PageErrorBoundary>
         </Layout>
       </Router>
     </StoreProvider>
