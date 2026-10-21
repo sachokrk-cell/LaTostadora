@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Product, Client, Sale, Purchase, Consumption } from '../types';
 import { supabase } from '../services/supabaseClient';
-import { loadSalesInPages } from '../services/salesLoader';
+import { loadSalesInPages, toSaleItemsRow } from '../services/salesLoader';
+import { createRefreshQueue } from '../services/refreshQueue';
+
+const TABLES = ['products', 'clients', 'sales', 'purchases', 'consumptions', 'settings'] as const;
+type StoreTable = typeof TABLES[number];
 
 interface StoreContextType extends AppState {
   addProduct: (p: Product) => Promise<void>;
@@ -19,6 +23,7 @@ interface StoreContextType extends AppState {
   stockThreshold: number;
   updateGlobalSettings: (g: number, t: number) => Promise<void>;
   isLoading: boolean;
+  isRefreshing: boolean;
   loadErrors: Record<string, string>;
   refreshData: () => Promise<void>;
 }
@@ -47,94 +52,84 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [stockThreshold, setStockThreshold] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
-  const refreshSequence = useRef(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const initialRequest = useRef<Promise<void> | null>(null);
 
-  const refreshData = async () => {
-    const sequence = ++refreshSequence.current;
-    setIsLoading(true);
-    try {
-      const [p, c, s, pur, cons, sett] = await Promise.all([
-        supabase.from('products').select('*').order('name'),
-        supabase.from('clients').select('*').order('name'),
-        loadSalesInPages(supabase).then(
-          data => ({ data, error: null }),
-          error => ({ data: null, error })
-        ),
-        supabase.from('purchases').select('*').order('date', { ascending: false }),
-        supabase.from('consumptions').select('*').order('date', { ascending: false }),
-        supabase.from('settings').select('*').eq('id', 'global_config').maybeSingle()
-      ]);
+  const readTable = async (table: StoreTable) => {
+    if (table === 'sales') return loadSalesInPages(supabase);
+    const query = table === 'settings'
+      ? supabase.from(table).select('*').eq('id', 'global_config').maybeSingle()
+      : supabase.from(table).select('*').order(['products', 'clients'].includes(table) ? 'name' : 'date', { ascending: ['products', 'clients'].includes(table) });
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  };
 
-      // Una respuesta anterior no debe reemplazar una actualización más reciente.
-      if (sequence !== refreshSequence.current) return;
-      const errors: Record<string, string> = {};
-      for (const [table, result] of Object.entries({ products: p, clients: c, sales: s, purchases: pur, consumptions: cons, settings: sett })) {
-        if (result.error) {
-          errors[table] = result.error.message || 'No se pudo consultar la tabla.';
-          console.error(`Error de lectura en ${table}:`, result.error);
-        }
-      }
-      setLoadErrors(errors);
-
-      if (p.data) setProducts(p.data.map((x: any) => ({
-        ...x,
-        costPrice: x.cost_price,
-        marginPercentage: x.margin_percentage,
-        sellingPrice: x.selling_price,
-        imageUrl: x.image_url || ''
-      })));
-
-      if (c.data) setClients(c.data.map((x: any) => ({
-        ...x,
-        totalSpent: x.total_spent
-      })));
-
-      if (s.data) setSales(s.data.map((x: any) => ({
-        ...x,
-        clientId: x.client_id,
-        clientName: x.client_name,
-        amountPaid: x.amount_paid,
-        paymentMethod: x.payment_method,
-        items: x.items || []
-      })));
-
-      if (pur.data) setPurchases(pur.data.map((x: any) => ({
-        ...x,
-        productId: x.product_id,
-        productName: x.product_name,
-        unitCost: x.unit_cost,
-        totalCost: x.total_cost
-      })));
-
-      if (cons.data) setConsumptions(cons.data.map((x: any) => ({
-        ...x,
-        productId: x.product_id,
-        productName: x.product_name
-      })));
-
-      if (sett.data) {
-        setMonthlyGoal(sett.data.monthly_goal);
-        setStockThreshold(sett.data.stock_threshold);
-      }
-    } catch (error) {
-      if (sequence === refreshSequence.current) {
-        console.error('Error al actualizar los datos:', error);
-        setLoadErrors({ sales: error instanceof Error ? error.message : 'No se pudieron actualizar los datos.' });
-      }
-    } finally {
-      if (sequence === refreshSequence.current) setIsLoading(false);
+  const applyTable = (table: StoreTable, data: any) => {
+    switch (table) {
+      case 'products': setProducts(data.map((x: any) => ({ ...x, costPrice: x.cost_price, marginPercentage: x.margin_percentage, sellingPrice: x.selling_price, imageUrl: x.image_url || '' }))); break;
+      case 'clients': setClients(data.map((x: any) => ({ ...x, totalSpent: x.total_spent }))); break;
+      case 'sales': setSales(data.map((x: any) => ({ ...x, clientId: x.client_id, clientName: x.client_name, amountPaid: x.amount_paid, paymentMethod: x.payment_method, items: x.items || [] }))); break;
+      case 'purchases': setPurchases(data.map((x: any) => ({ ...x, productId: x.product_id, productName: x.product_name, unitCost: x.unit_cost, totalCost: x.total_cost }))); break;
+      case 'consumptions': setConsumptions(data.map((x: any) => ({ ...x, productId: x.product_id, productName: x.product_name }))); break;
+      case 'settings': if (data) { setMonthlyGoal(data.monthly_goal); setStockThreshold(data.stock_threshold); } break;
     }
   };
 
-  useEffect(() => {
-    refreshData();
+  const executeRefresh = async (tables: StoreTable[]) => {
+    setIsRefreshing(true);
+    try {
+      const results = await Promise.allSettled(tables.map(async table => {
+        const data = await readTable(table);
+        applyTable(table, data);
+      }));
+      setLoadErrors(previous => {
+        const errors = { ...previous };
+        results.forEach((result, index) => {
+          const table = tables[index];
+          if (result.status === 'rejected') {
+            errors[table] = result.reason?.message || 'No se pudo consultar la tabla.';
+            console.error('Error de lectura en ' + table + ':', result.reason);
+          } else {
+            delete errors[table];
+          }
+        });
+        return errors;
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
+  const queue = useRef<ReturnType<typeof createRefreshQueue<StoreTable>> | null>(null);
+  if (!queue.current) queue.current = createRefreshQueue<StoreTable>(executeRefresh);
+  const refreshTables = (tables: readonly StoreTable[]) => queue.current!(tables);
+  const refreshData = () => refreshTables(TABLES);
+
+  useEffect(() => {
+    let active = true;
+    if (!initialRequest.current) initialRequest.current = refreshData();
+    void initialRequest.current.then(() => { if (active) setIsLoading(false); });
+
+    const changed = new Set<StoreTable>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const sub = supabase
-      .channel('la_tostadora_v5')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData())
+      .channel('la_tostadora_v6')
+      .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
+        if (!TABLES.includes(payload.table as StoreTable)) return;
+        changed.add(payload.table as StoreTable);
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const tables = [...changed];
+          changed.clear();
+          void refreshTables(tables);
+        }, 300);
+      })
       .subscribe();
 
     return () => {
+      active = false;
+      clearTimeout(timer);
       supabase.removeChannel(sub);
     };
   }, []);
@@ -148,7 +143,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       throw error;
     }
 
-    await refreshData();
+    await refreshTables(["products"]);
   };
 
   const updateProduct = async (p: Product) => {
@@ -166,7 +161,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       throw error;
     }
 
-    await refreshData();
+    await refreshTables(["products"]);
   };
 
   const addPurchase = async (p: Purchase) => {
@@ -203,7 +198,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    await refreshData();
+    await refreshTables(["purchases","products"]);
   };
 
   const addConsumption = async (c: Consumption) => {
@@ -236,7 +231,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    await refreshData();
+    await refreshTables(["consumptions","products"]);
   };
 
   const updateGlobalSettings = async (g: number, t: number) => {
@@ -250,7 +245,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       throw error;
     }
 
-    await refreshData();
+    await refreshTables(["settings"]);
   };
 
   const importData = async (jsonData: string) => {
@@ -288,7 +283,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             amount_paid: s.amountPaid,
             balance: s.balance,
             payment_method: s.paymentMethod,
-            items: s.items
+            items: toSaleItemsRow(s.items || [])
           });
 
           if (error) throw error;
@@ -313,6 +308,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       purchases,
       consumptions,
       isLoading,
+      isRefreshing,
       loadErrors,
       monthlyGoal,
       stockThreshold,
@@ -329,7 +325,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           throw error;
         }
 
-        await refreshData();
+        await refreshTables(["products"]);
       },
 
       addClient: async (c) => {
@@ -348,7 +344,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           throw error;
         }
 
-        await refreshData();
+        await refreshTables(["clients"]);
       },
 
       updateClient: async (c) => {
@@ -366,7 +362,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           throw error;
         }
 
-        await refreshData();
+        await refreshTables(["clients"]);
       },
 
       deleteClient: async (id) => {
@@ -378,7 +374,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           throw error;
         }
 
-        await refreshData();
+        await refreshTables(["clients"]);
       },
 
       addSale: async (s) => {
@@ -391,7 +387,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           amount_paid: s.amountPaid,
           balance: s.balance,
           payment_method: s.paymentMethod,
-          items: s.items
+          items: toSaleItemsRow(s.items || [])
         }]);
 
         if (error) {
@@ -416,7 +412,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
 
-        await refreshData();
+        await refreshTables(["sales","products"]);
       },
 
       deleteSale: async (id) => {
@@ -448,7 +444,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           throw error;
         }
 
-        await refreshData();
+        await refreshTables(["sales","products"]);
       },
 
       addPurchase,
