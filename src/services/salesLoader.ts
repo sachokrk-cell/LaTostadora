@@ -1,17 +1,34 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// Los tickets incluyen snapshots de productos e imágenes. Serializarlos todos
-// en un único SELECT provoca un statement_timeout en la base de producción.
 export async function loadSalesInPages(client: Pick<SupabaseClient, 'from'>) {
+  try {
+    return await loadFrom(client, 'sales_read_model_v1', 200);
+  } catch (error) {
+    // Permite publicar el frontend antes del SQL sin perder el historial actual.
+    if (['42P01', 'PGRST205'].includes((error as { code?: string }).code || '')) {
+      return loadFrom(client, 'sales', 10);
+    }
+    throw error;
+  }
+}
+
+export function toSaleItemsRow(items: Record<string, any>[]) {
+  return items.map(item => {
+    const { imageUrl, image_url, ...snapshot } = item;
+    return snapshot;
+  });
+}
+
+async function loadFrom(client: Pick<SupabaseClient, 'from'>, source: string, initialPageSize: number) {
   const rows: Record<string, any>[] = [];
   const ids = new Set<string>();
   let offset = 0;
-  let pageSize = 10;
+  let pageSize = initialPageSize;
   let expectedCount: number | null = null;
 
   while (true) {
     const { data, error, count } = await client
-      .from('sales')
+      .from(source)
       .select('*', { count: 'exact' })
       .order('date', { ascending: false })
       .order('id', { ascending: false })
@@ -23,7 +40,7 @@ export async function loadSalesInPages(client: Pick<SupabaseClient, 'from'>) {
         pageSize = Math.max(1, Math.floor(pageSize / 2));
         continue;
       }
-      throw new Error(`No se pudieron leer las ventas (${error.code || 'sin código'}): ${error.message}`);
+      throw Object.assign(new Error(`No se pudieron leer las ventas (${error.code || 'sin código'}): ${error.message}`), { code: error.code });
     }
 
     if (!Array.isArray(data)) throw new Error('Supabase devolvió un formato de ventas inesperado.');
@@ -40,7 +57,8 @@ export async function loadSalesInPages(client: Pick<SupabaseClient, 'from'>) {
         throw new Error('El historial cambió durante la carga o contiene identificadores inválidos. Actualizá nuevamente.');
       }
       ids.add(row.id);
-      rows.push(row);
+      if (row.items != null && !Array.isArray(row.items)) throw new Error('Un ticket tiene sus productos en un formato inválido.');
+      rows.push({ ...row, items: toSaleItemsRow(row.items || []) });
     }
 
     offset += data.length;
