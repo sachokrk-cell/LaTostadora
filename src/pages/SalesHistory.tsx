@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
+import DataLoadError from '../components/DataLoadError';
 import { Sale } from '../types';
 import { 
   Search, Trash2, Calendar, Eye, X, AlertTriangle, 
@@ -7,7 +8,7 @@ import {
 } from 'lucide-react';
 
 const SalesHistory = () => {
-  const { sales, deleteSale, isLoading } = useStore();
+  const { sales, deleteSale, isLoading, loadErrors, refreshData } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -47,6 +48,8 @@ const SalesHistory = () => {
       </div>
     );
   }
+
+  if (loadErrors.sales) return <DataLoadError message={loadErrors.sales} onRetry={() => { void refreshData(); }} />;
 
   return (
     <div className="p-4 md:p-8 space-y-6 pb-24 text-[#1C1C1C] bg-white min-h-screen animate-fade-in">
